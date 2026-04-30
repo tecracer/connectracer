@@ -6,7 +6,8 @@ package provider
 import (
 	"context"
 
-
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/wisdom"
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
@@ -47,9 +48,9 @@ type ScaffoldingProvider struct {
 	version string
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
+// ConnectracerProviderModel describes the provider data model.
+type ConnectracerProviderModel struct {
+	Region types.String `tfsdk:"region"`
 }
 
 func (p *connectracerProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -59,9 +60,10 @@ func (p *connectracerProvider) Metadata(_ context.Context, _ provider.MetadataRe
 
 func (p *connectracerProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Provider for AWS Connect and related services",
 		Attributes: map[string]schema.Attribute{
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
+			"region": schema.StringAttribute{
+				MarkdownDescription: "AWS region (optional, uses AWS SDK default resolution if not specified)",
 				Optional:            true,
 			},
 		},
@@ -69,7 +71,35 @@ func (p *connectracerProvider) Schema(ctx context.Context, req provider.SchemaRe
 }
 
 func (p *connectracerProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data ConnectracerProviderModel
 
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Load AWS configuration
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to create AWS config",
+			err.Error(),
+		)
+		return
+	}
+
+	// Override region if specified in provider configuration
+	if !data.Region.IsNull() {
+		cfg.Region = data.Region.ValueString()
+	}
+
+	// Create AWS Wisdom client
+	wisdomClient := wisdom.NewFromConfig(cfg)
+
+	// Make the client available to data sources and resources
+	resp.DataSourceData = wisdomClient
+	resp.ResourceData = wisdomClient
 }
 
 func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.Resource {
@@ -87,6 +117,7 @@ func (p *connectracerProvider) EphemeralResources(ctx context.Context) []func() 
 func (p *connectracerProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewExampleDataSource,
+		NewWisdomKnowledgeBasesDataSource,
 	}
 }
 

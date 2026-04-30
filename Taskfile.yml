@@ -1,0 +1,63 @@
+version: "3"
+
+vars:
+  BINARY_NAME: terraform-provider-connectracer
+  DIST_DIR: dist
+  GOOS:
+    sh: go env GOOS
+  GOARCH:
+    sh: go env GOARCH
+
+tasks:
+  build:
+    desc: Build the provider binary into dist directory
+    cmds:
+      - mkdir -p {{.DIST_DIR}}
+      - go build -o {{.DIST_DIR}}/{{.BINARY_NAME}} .
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.DIST_DIR}}/{{.BINARY_NAME}}"
+
+  install:
+    desc: Install the provider binary to standard Terraform plugin directory
+    deps:
+      - build
+    vars:
+      INSTALL_PATH: "{{.HOME}}/.terraform.d/plugins/github.com/tecracer/connectracer/dev/{{.GOOS}}_{{.GOARCH}}"
+    cmds:
+      - mkdir -p {{.INSTALL_PATH}}
+      - cp {{.DIST_DIR}}/{{.BINARY_NAME}} {{.INSTALL_PATH}}/{{.BINARY_NAME}}
+      - chmod +x {{.INSTALL_PATH}}/{{.BINARY_NAME}}
+      - echo "Installed to {{.INSTALL_PATH}}/{{.BINARY_NAME}}"
+      - echo "Update your ~/.terraformrc dev_overrides to point to {{.INSTALL_PATH}} or use 'task install-dev' for project root installation"
+    sources:
+      - "{{.DIST_DIR}}/{{.BINARY_NAME}}"
+    generates:
+      - "{{.INSTALL_PATH}}/{{.BINARY_NAME}}"
+
+  install-dev:
+    desc: Install the provider binary to project root for dev_overrides
+    deps:
+      - build
+    cmds:
+      - cp {{.DIST_DIR}}/{{.BINARY_NAME}} ./{{.BINARY_NAME}}
+      - chmod +x ./{{.BINARY_NAME}}
+      - echo "Installed to project root {{.BINARY_NAME}}"
+      - echo "Make sure your ~/.terraformrc dev_overrides points to {{.PWD}}"
+    sources:
+      - "{{.DIST_DIR}}/{{.BINARY_NAME}}"
+    generates:
+      - "./{{.BINARY_NAME}}"
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.DIST_DIR}}
+
+  default:
+    desc: Default task - build the provider
+    cmds:
+      - task: build
