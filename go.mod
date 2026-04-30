@@ -1,12 +1,13 @@
-module github.com/hashicorp/terraform-provider-scaffolding-framework
+module github.com/tecracer/connectracer
 
-go 1.25.8
+go 1.26.2
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-log v0.10.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
+	github.com/hashicorp/terraform-provider-scaffolding-framework v0.0.0-20260428131959-61a84db31386
 )
 
 require (
