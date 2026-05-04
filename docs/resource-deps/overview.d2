@@ -1,0 +1,226 @@
+# AWS Connect Resource Dependencies
+
+# Classes for consistent styling
+classes: {
+  service: {
+    shape: rectangle
+    style: {
+      fill: "#FFF5E6"
+      stroke: "#FF9900"
+      stroke-width: 3
+      border-radius: 8
+      font-size: 16
+      bold: true
+    }
+  }
+
+  resource: {
+    shape: cylinder
+    style: {
+      stroke-width: 2
+      border-radius: 5
+      font-size: 14
+    }
+  }
+}
+
+# Wisdom Service
+wisdom: {
+  class: service
+  label: "Amazon Connect Wisdom"
+
+  assistant: {
+    class: resource
+    label: "Wisdom Assistant"
+    style: {
+      fill: "#4A90E2"
+      stroke: "#2E5C8A"
+    }
+  }
+
+  assistant_association: {
+    class: resource
+    label: "Assistant Association"
+    style: {
+      fill: "#4A90E2"
+      stroke: "#2E5C8A"
+    }
+  }
+}
+
+# Q Connect Service
+qconnect: {
+  class: service
+  label: "Amazon Q Connect"
+
+  knowledge_base: {
+    class: resource
+    label: "Knowledge Base"
+    style: {
+      fill: "#6BB6FF"
+      stroke: "#4A8ED4"
+    }
+  }
+}
+
+# AppIntegrations Service
+appintegrations: {
+  class: service
+  label: "AppIntegrations"
+
+  data_integration: {
+    class: resource
+    label: "Data Integration"
+    style: {
+      fill: "#82CA9D"
+      stroke: "#4A9D6E"
+    }
+  }
+}
+
+# S3 Service
+s3: {
+  class: service
+  label: "Amazon S3"
+
+  bucket: {
+    class: resource
+    label: "S3 Bucket"
+    style: {
+      fill: "#E8A838"
+      stroke: "#B8862B"
+    }
+  }
+
+  bucket_notification: {
+    class: resource
+    label: "Bucket Notification (EventBridge)"
+    style: {
+      fill: "#E8A838"
+      stroke: "#B8862B"
+    }
+  }
+}
+
+# KMS Service
+kms: {
+  class: service
+  label: "AWS KMS"
+
+  key: {
+    class: resource
+    label: "KMS Key"
+    style: {
+      fill: "#F5B041"
+      stroke: "#D4AC0D"
+    }
+  }
+}
+
+# Connect Service
+connect: {
+  class: service
+  label: "Amazon Connect"
+
+  instance: {
+    class: resource
+    label: "Connect Instance"
+    style: {
+      fill: "#D4A5E8"
+      stroke: "#9B59B6"
+    }
+  }
+
+  integration_association: {
+    class: resource
+    label: "Integration Association"
+    style: {
+      fill: "#D4A5E8"
+      stroke: "#9B59B6"
+    }
+  }
+}
+
+# Dependencies
+wisdom.assistant -> connect.instance: "references"
+wisdom.assistant_association -> wisdom.assistant: "references"
+wisdom.assistant_association -> qconnect.knowledge_base: "references"
+qconnect.knowledge_base -> appintegrations.data_integration: "source"
+appintegrations.data_integration -> s3.bucket: "source_uri"
+s3.bucket_notification -> s3.bucket: "bucket"
+appintegrations.data_integration -> kms.key: "kms_key"
+connect.integration_association -> connect.instance: "instance_id"
+connect.integration_association -> wisdom.assistant: "integration_arn"
+connect.integration_association -> qconnect.knowledge_base: "integration_arn"
+
+# Legend
+legend: {
+  label: "Legend"
+  shape: rectangle
+  style: {
+    fill: "#ECF0F1"
+    stroke: "#95A5A6"
+    stroke-width: 2
+    border-radius: 8
+  }
+
+  service_box: {
+    class: service
+    label: "AWS Service"
+  }
+
+  resource_box: {
+    class: resource
+    label: "Resource"
+    style: {
+      fill: "#BDC3C7"
+      stroke: "#7F8C8D"
+    }
+  }
+
+  direct_dep: {
+    label: "Direct Dependency"
+    shape: rectangle
+    style: {
+      fill: "#FFFFFF"
+      stroke: "#34495E"
+      border-radius: 5
+    }
+  }
+
+  integration_dep: {
+    label: "Service Integration"
+    shape: rectangle
+    style: {
+      fill: "#FFFFFF"
+      stroke: "#7F8C8D"
+      border-radius: 5
+    }
+  }
+
+  service_box -> resource_box: {
+    label: "contains"
+    style: {
+      stroke: "#34495E"
+      stroke-width: 2
+      border-radius: 3
+    }
+  }
+
+  resource_box -> direct_dep: {
+    style: {
+      stroke: "#34495E"
+      stroke-width: 2
+      border-radius: 3
+    }
+  }
+
+  direct_dep -> integration_dep: {
+    style: {
+      stroke-dash: 4
+      stroke: "#7F8C8D"
+      stroke-width: 2
+      border-radius: 3
+    }
+  }
+}

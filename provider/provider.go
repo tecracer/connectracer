@@ -7,6 +7,9 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/appintegrations"
+	"github.com/aws/aws-sdk-go-v2/service/connect"
+	"github.com/aws/aws-sdk-go-v2/service/qconnect"
 	"github.com/aws/aws-sdk-go-v2/service/wisdom"
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -53,6 +56,14 @@ type ConnectracerProviderModel struct {
 	Region types.String `tfsdk:"region"`
 }
 
+// ProviderClients holds the AWS service clients.
+type ProviderClients struct {
+	Wisdom          *wisdom.Client
+	QConnect        *qconnect.Client
+	AppIntegrations *appintegrations.Client
+	Connect         *connect.Client
+}
+
 func (p *connectracerProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
     resp.TypeName = "connectracer"
     resp.Version = p.version
@@ -97,14 +108,36 @@ func (p *connectracerProvider) Configure(ctx context.Context, req provider.Confi
 	// Create AWS Wisdom client
 	wisdomClient := wisdom.NewFromConfig(cfg)
 
-	// Make the client available to data sources and resources
-	resp.DataSourceData = wisdomClient
-	resp.ResourceData = wisdomClient
+	// Create AWS Q Connect client
+	qconnectClient := qconnect.NewFromConfig(cfg)
+
+	// Create AWS AppIntegrations client
+	appIntegrationsClient := appintegrations.NewFromConfig(cfg)
+
+	// Create AWS Connect client
+	connectClient := connect.NewFromConfig(cfg)
+
+	// Store all clients in a struct for resources to access
+	clients := &ProviderClients{
+		Wisdom:          wisdomClient,
+		QConnect:        qconnectClient,
+		AppIntegrations: appIntegrationsClient,
+		Connect:         connectClient,
+	}
+
+	// Make the clients available to data sources and resources
+	resp.DataSourceData = clients
+	resp.ResourceData = clients
 }
 
 func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewExampleResource,
+		NewWisdomAssistantResource,
+		NewQConnectKnowledgeBaseResource,
+		NewWisdomAssistantAssociationResource,
+		NewAppIntegrationsDataIntegrationResource,
+		NewConnectIntegrationAssociationResource,
 	}
 }
 
@@ -118,6 +151,8 @@ func (p *connectracerProvider) DataSources(ctx context.Context) []func() datasou
 	return []func() datasource.DataSource{
 		NewExampleDataSource,
 		NewWisdomKnowledgeBasesDataSource,
+		NewWisdomAssistantsDataSource,
+		NewQConnectKnowledgeBaseDataSource,
 	}
 }
 
