@@ -100,6 +100,15 @@ s3: {
       stroke: "#B8862B"
     }
   }
+
+  bucket_policy: {
+    class: resource
+    label: "Bucket Policy"
+    style: {
+      fill: "#E8A838"
+      stroke: "#B8862B"
+    }
+  }
 }
 
 # KMS Service
@@ -148,6 +157,7 @@ wisdom.assistant_association -> qconnect.knowledge_base: "references"
 qconnect.knowledge_base -> appintegrations.data_integration: "source"
 appintegrations.data_integration -> s3.bucket: "source_uri"
 s3.bucket_notification -> s3.bucket: "bucket"
+s3.bucket_policy -> s3.bucket: "bucket"
 appintegrations.data_integration -> kms.key: "kms_key"
 connect.integration_association -> connect.instance: "instance_id"
 connect.integration_association -> wisdom.assistant: "integration_arn"

@@ -55,7 +55,7 @@ func (r *WisdomAssistantAssociationResource) Metadata(ctx context.Context, req r
 
 func (r *WisdomAssistantAssociationResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manages an AWS Wisdom Assistant Association resource",
+		MarkdownDescription: "Manages an AWS Wisdom Assistant Association resource. Automatically sets the required `AmazonConnectEnabled = \"True\"` tag.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -100,9 +100,13 @@ func (r *WisdomAssistantAssociationResource) Schema(ctx context.Context, req res
 				},
 			},
 			"tags": schema.MapAttribute{
-				MarkdownDescription: "Tags to apply to the assistant association",
+				MarkdownDescription: "Tags to apply to the assistant association. The `AmazonConnectEnabled = \"True\"` tag is automatically added if not present.",
 				Optional:            true,
+				Computed:            true,
 				ElementType:         frameworktypes.StringType,
+				PlanModifiers: []planmodifier.Map{
+					&ensureConnectEnabledTagModifier{},
+				},
 			},
 		},
 	}
@@ -138,10 +142,18 @@ func (r *WisdomAssistantAssociationResource) Create(ctx context.Context, req res
 		return
 	}
 
+	// Ensure required tags
+	tags, err := ensureRequiredTags(ctx, data.Tags)
+	if err != nil {
+		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
+		return
+	}
+
 	// Build CreateAssistantAssociation input
 	input := &wisdom.CreateAssistantAssociationInput{
 		AssistantId:     aws.String(data.AssistantID.ValueString()),
 		AssociationType: types.AssociationType(data.AssociationType.ValueString()),
+		Tags:            tags,
 	}
 
 	// Add association data
@@ -149,17 +161,6 @@ func (r *WisdomAssistantAssociationResource) Create(ctx context.Context, req res
 		input.Association = &types.AssistantAssociationInputDataMemberKnowledgeBaseId{
 			Value: data.AssociationData.KnowledgeBaseID.ValueString(),
 		}
-	}
-
-	// Add tags if provided
-	if !data.Tags.IsNull() {
-		tags := make(map[string]string)
-		diags := data.Tags.ElementsAs(ctx, &tags, false)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		input.Tags = tags
 	}
 
 	tflog.Debug(ctx, "Creating AWS Wisdom Assistant Association", map[string]interface{}{
@@ -194,13 +195,18 @@ func (r *WisdomAssistantAssociationResource) Create(ctx context.Context, req res
 			}
 		}
 
-		// Map tags
-		if len(output.AssistantAssociation.Tags) > 0 {
-			tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, output.AssistantAssociation.Tags)
-			resp.Diagnostics.Append(diags...)
-			if !resp.Diagnostics.HasError() {
-				data.Tags = tagsMap
-			}
+		// Store tags back in state
+		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tags)
+		resp.Diagnostics.Append(diags...)
+		if !resp.Diagnostics.HasError() {
+			data.Tags = tagsMap
+		}
+	} else {
+		// If API didn't return tags, still store what we sent
+		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tags)
+		resp.Diagnostics.Append(diags...)
+		if !resp.Diagnostics.HasError() {
+			data.Tags = tagsMap
 		}
 	}
 
@@ -299,14 +305,11 @@ func (r *WisdomAssistantAssociationResource) Update(ctx context.Context, req res
 	if !data.Tags.Equal(state.Tags) {
 		associationArn := state.AssistantAssociationArn.ValueString()
 
-		// Get new tags
-		var newTags map[string]string
-		if !data.Tags.IsNull() {
-			diags := data.Tags.ElementsAs(ctx, &newTags, false)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
+		// Ensure required tags for new tags
+		newTags, err := ensureRequiredTags(ctx, data.Tags)
+		if err != nil {
+			resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
+			return
 		}
 
 		// Get old tags

@@ -62,7 +62,7 @@ func (r *QConnectKnowledgeBaseResource) Metadata(ctx context.Context, req resour
 
 func (r *QConnectKnowledgeBaseResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manages an AWS Q Connect Knowledge Base resource",
+		MarkdownDescription: "Manages an AWS Q Connect Knowledge Base resource. Automatically sets the required `AmazonConnectEnabled = \"True\"` tag.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -95,9 +95,13 @@ func (r *QConnectKnowledgeBaseResource) Schema(ctx context.Context, req resource
 				Optional:            true,
 			},
 			"tags": schema.MapAttribute{
-				MarkdownDescription: "Tags to apply to the knowledge base",
+				MarkdownDescription: "Tags to apply to the knowledge base. The `AmazonConnectEnabled = \"True\"` tag is automatically added if not present.",
 				Optional:            true,
+				Computed:            true,
 				ElementType:         frameworktypes.StringType,
+				PlanModifiers: []planmodifier.Map{
+					&ensureConnectEnabledTagModifier{},
+				},
 			},
 			"rendering_configuration": schema.SingleNestedAttribute{
 				MarkdownDescription: "Information about how to render the content",
@@ -178,16 +182,13 @@ func (r *QConnectKnowledgeBaseResource) Create(ctx context.Context, req resource
 		input.Description = aws.String(data.Description.ValueString())
 	}
 
-	// Add tags if provided
-	if !data.Tags.IsNull() {
-		tags := make(map[string]string)
-		diags := data.Tags.ElementsAs(ctx, &tags, false)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		input.Tags = tags
+	// Ensure required tags
+	tags, err := ensureRequiredTags(ctx, data.Tags)
+	if err != nil {
+		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
+		return
 	}
+	input.Tags = tags
 
 	// Add rendering configuration if provided
 	if data.RenderingConfiguration != nil {
@@ -243,13 +244,11 @@ func (r *QConnectKnowledgeBaseResource) Create(ctx context.Context, req resource
 			data.Description = frameworktypes.StringPointerValue(output.KnowledgeBase.Description)
 		}
 
-		// Map tags
-		if len(output.KnowledgeBase.Tags) > 0 {
-			tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, output.KnowledgeBase.Tags)
-			resp.Diagnostics.Append(diags...)
-			if !resp.Diagnostics.HasError() {
-				data.Tags = tagsMap
-			}
+		// Store tags back in state
+		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tags)
+		resp.Diagnostics.Append(diags...)
+		if !resp.Diagnostics.HasError() {
+			data.Tags = tagsMap
 		}
 
 		// Map rendering configuration
@@ -399,14 +398,11 @@ func (r *QConnectKnowledgeBaseResource) Update(ctx context.Context, req resource
 	if !data.Tags.Equal(state.Tags) {
 		knowledgeBaseArn := state.KnowledgeBaseArn.ValueString()
 
-		// Get new tags
-		var newTags map[string]string
-		if !data.Tags.IsNull() {
-			diags := data.Tags.ElementsAs(ctx, &newTags, false)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
+		// Ensure required tags
+		newTags, err := ensureRequiredTags(ctx, data.Tags)
+		if err != nil {
+			resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
+			return
 		}
 
 		// Get old tags
@@ -457,6 +453,13 @@ func (r *QConnectKnowledgeBaseResource) Update(ctx context.Context, req resource
 				)
 				return
 			}
+		}
+
+		// Store tags back in state
+		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, newTags)
+		resp.Diagnostics.Append(diags...)
+		if !resp.Diagnostics.HasError() {
+			data.Tags = tagsMap
 		}
 	}
 

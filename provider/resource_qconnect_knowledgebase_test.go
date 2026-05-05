@@ -65,6 +65,32 @@ func TestAccQConnectKnowledgeBaseResourceWithEncryption(t *testing.T) {
 	})
 }
 
+func TestAccQConnectKnowledgeBaseResourceAutoTag(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing - verify AmazonConnectEnabled tag is automatically added
+			{
+				Config: testAccQConnectKnowledgeBaseResourceConfig("test-kb-autotag", "CUSTOM", "Test Auto Tag"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("connectracer_qconnect_knowledgebase.test", "name", "test-kb-autotag"),
+					resource.TestCheckResourceAttr("connectracer_qconnect_knowledgebase.test", "tags.AmazonConnectEnabled", "True"),
+				),
+			},
+			// Verify tag persists with user-provided tags
+			{
+				Config: testAccQConnectKnowledgeBaseResourceConfigWithTags("test-kb-autotag", "CUSTOM", "Test Auto Tag"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("connectracer_qconnect_knowledgebase.test", "tags.AmazonConnectEnabled", "True"),
+					resource.TestCheckResourceAttr("connectracer_qconnect_knowledgebase.test", "tags.Environment", "test"),
+					resource.TestCheckResourceAttr("connectracer_qconnect_knowledgebase.test", "tags.Team", "platform"),
+				),
+			},
+		},
+	})
+}
+
 func testAccQConnectKnowledgeBaseResourceConfig(name, kbType, description string) string {
 	return fmt.Sprintf(`
 resource "connectracer_qconnect_knowledgebase" "test" {
