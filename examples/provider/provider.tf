@@ -1,3 +1,8 @@
-provider "scaffolding" {
-  # example configuration here
+terraform {
+  required_providers {
+    connectracer = {
+      source = "github.comtecracer/connectracer"
+
+    }
+  }
 }
