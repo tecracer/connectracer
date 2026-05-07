@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-05-07
+
+### Fixed
+- **Tag Plan Validation**: Removed plan modifier that was adding `AmazonConnectEnabled` tag during planning phase, which caused "Provider produced invalid plan" errors. The tag is now added only during resource creation/update and stored in state. This fixes Terraform's plan validation while maintaining automatic tag functionality.
 
 ## [0.1.1] - 2026-05-05
 
@@ -23,8 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `connectracer_qconnect_knowledgebase` - Get details of a specific knowledge base
 
 #### Features
-- **Automatic Tag Management**: All Wisdom and AppIntegrations resources automatically add `AmazonConnectEnabled = "True"` tag
-- **Custom Plan Modifier**: Required tags are visible in Terraform plans before applying
+- **Automatic Tag Management**: All Wisdom and AppIntegrations resources automatically add `AmazonConnectEnabled = "True"` tag during creation
 - **AWS SDK v2 Integration**: Modern, maintained Go SDK for AWS services
 - **Shared Tag Utilities**: Consistent tag handling across all resources via `tags_utils.go`
 - **Comprehensive Documentation**: Full examples including S3, KMS, and EventBridge configuration

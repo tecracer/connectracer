@@ -104,9 +104,6 @@ func (r *WisdomAssistantAssociationResource) Schema(ctx context.Context, req res
 				Optional:            true,
 				Computed:            true,
 				ElementType:         frameworktypes.StringType,
-				PlanModifiers: []planmodifier.Map{
-					&ensureConnectEnabledTagModifier{},
-				},
 			},
 		},
 	}

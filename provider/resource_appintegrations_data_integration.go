@@ -95,9 +95,6 @@ func (r *AppIntegrationsDataIntegrationResource) Schema(ctx context.Context, req
 				Optional:            true,
 				Computed:            true,
 				ElementType:         frameworktypes.StringType,
-				PlanModifiers: []planmodifier.Map{
-					&ensureConnectEnabledTagModifier{},
-				},
 			},
 		},
 	}
