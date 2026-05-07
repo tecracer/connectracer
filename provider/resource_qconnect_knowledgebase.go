@@ -99,9 +99,6 @@ func (r *QConnectKnowledgeBaseResource) Schema(ctx context.Context, req resource
 				Optional:            true,
 				Computed:            true,
 				ElementType:         frameworktypes.StringType,
-				PlanModifiers: []planmodifier.Map{
-					&ensureConnectEnabledTagModifier{},
-				},
 			},
 			"rendering_configuration": schema.SingleNestedAttribute{
 				MarkdownDescription: "Information about how to render the content",
