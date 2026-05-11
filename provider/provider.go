@@ -138,6 +138,7 @@ func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.
 		NewWisdomAssistantAssociationResource,
 		NewAppIntegrationsDataIntegrationResource,
 		NewConnectIntegrationAssociationResource,
+		NewConnectRuleResource,
 	}
 }
 
