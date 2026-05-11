@@ -52,9 +52,10 @@ resource "connectracer_wisdom_assistant" "encrypted" {
 ### Optional
 
 - `description` (String) The description of the assistant
-- `tags` (Map of String) Tags to apply to the assistant. The `AmazonConnectEnabled = "True"` tag is automatically added if not present.
+- `tags` (Map of String) User-defined tags to apply to the assistant.
 
 ### Read-Only
 
 - `assistant_arn` (String) The ARN of the assistant
 - `id` (String) The ID of the assistant
+- `tags_all` (Map of String) All tags including provider-added tags. The `AmazonConnectEnabled = "True"` tag is automatically added.

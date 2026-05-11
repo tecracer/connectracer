@@ -63,12 +63,13 @@ resource "connectracer_wisdom_assistant_association" "example" {
 
 ### Optional
 
-- `tags` (Map of String) Tags to apply to the assistant association. The `AmazonConnectEnabled = "True"` tag is automatically added if not present.
+- `tags` (Map of String) User-defined tags to apply to the assistant association.
 
 ### Read-Only
 
 - `assistant_association_arn` (String) The ARN of the assistant association
 - `id` (String) The ID of the assistant association
+- `tags_all` (Map of String) All tags including provider-added tags. The `AmazonConnectEnabled = "True"` tag is automatically added.
 
 <a id="nestedatt--association_data"></a>
 ### Nested Schema for `association_data`

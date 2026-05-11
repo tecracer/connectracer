@@ -24,9 +24,10 @@ Manages an AWS AppIntegrations DataIntegration resource
 
 - `description` (String) The description of the data integration
 - `kms_key` (String) The KMS key for encryption
-- `tags` (Map of String) Tags to apply to the data integration. The `AmazonConnectEnabled = "True"` tag is automatically added if not present.
+- `tags` (Map of String) User-defined tags to apply to the data integration.
 
 ### Read-Only
 
 - `arn` (String) The ARN of the data integration
 - `id` (String) The identifier of the data integration
+- `tags_all` (Map of String) All tags including provider-added tags. The `AmazonConnectEnabled = "True"` tag is automatically added.

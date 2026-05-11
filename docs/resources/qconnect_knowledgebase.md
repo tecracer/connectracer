@@ -298,13 +298,14 @@ resource "connectracer_connect_integration_association" "knowledge_base" {
 - `rendering_configuration` (Attributes) Information about how to render the content (see [below for nested schema](#nestedatt--rendering_configuration))
 - `server_side_encryption_configuration` (Attributes) The KMS key used for encryption (see [below for nested schema](#nestedatt--server_side_encryption_configuration))
 - `source_configuration` (Attributes) The source of the knowledge base content. Only set for EXTERNAL knowledge bases (see [below for nested schema](#nestedatt--source_configuration))
-- `tags` (Map of String) Tags to apply to the knowledge base. The `AmazonConnectEnabled = "True"` tag is automatically added if not present.
+- `tags` (Map of String) User-defined tags to apply to the knowledge base.
 
 ### Read-Only
 
 - `id` (String) The ID of the knowledge base
 - `knowledge_base_arn` (String) The ARN of the knowledge base
 - `status` (String) The status of the knowledge base
+- `tags_all` (Map of String) All tags including provider-added tags. The `AmazonConnectEnabled = "True"` tag is automatically added.
 
 <a id="nestedatt--rendering_configuration"></a>
 ### Nested Schema for `rendering_configuration`
