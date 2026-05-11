@@ -123,6 +123,7 @@ resource "connectracer_connect_ai_agent" "self_service" {
 - `id` (String) The identifier of the AI Agent
 - `modified_time` (String) The time the AI Agent was last modified (RFC3339 format)
 - `origin` (String) The origin of the AI Agent
+- `qualified_id` (String) The AI Agent ID with version qualifier appended (e.g., `id:version_number`). Use this to reference the agent from other resources
 - `status` (String) The status of the AI Agent
 - `version_number` (Number) The version number of the AI Agent (populated when `create_version` is true)
 

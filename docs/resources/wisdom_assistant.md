@@ -51,6 +51,7 @@ resource "connectracer_wisdom_assistant" "encrypted" {
 
 ### Optional
 
+- `ai_agent_configuration` (Map of String) The AI Agent configuration for the assistant. A map of AI Agent type to the qualified AI Agent ID (with version qualifier, e.g., `uuid:version`). Valid keys: `ANSWER_RECOMMENDATION`, `MANUAL_SEARCH`, `SELF_SERVICE`, `EMAIL_OVERVIEW`, `EMAIL_RESPONSE`, `EMAIL_GENERATIVE_ANSWER`, `NOTE_TAKING`, `ORCHESTRATION`, `CASE_SUMMARIZATION`
 - `description` (String) The description of the assistant
 - `tags` (Map of String) User-defined tags to apply to the assistant.
 

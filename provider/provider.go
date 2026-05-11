@@ -134,6 +134,7 @@ func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.
 	return []func() resource.Resource{
 		NewExampleResource,
 		NewWisdomAssistantResource,
+		NewWisdomAssistantAIAgentsResource,
 		NewQConnectKnowledgeBaseResource,
 		NewWisdomAssistantAssociationResource,
 		NewAppIntegrationsDataIntegrationResource,

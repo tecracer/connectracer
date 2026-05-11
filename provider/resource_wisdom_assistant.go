@@ -34,13 +34,13 @@ type WisdomAssistantResource struct {
 
 // WisdomAssistantResourceModel describes the resource data model.
 type WisdomAssistantResourceModel struct {
-	ID           frameworktypes.String `tfsdk:"id"`
-	AssistantArn frameworktypes.String `tfsdk:"assistant_arn"`
-	Name         frameworktypes.String `tfsdk:"name"`
-	Type         frameworktypes.String `tfsdk:"type"`
-	Description  frameworktypes.String `tfsdk:"description"`
-	Tags         frameworktypes.Map    `tfsdk:"tags"`
-	TagsAll      frameworktypes.Map    `tfsdk:"tags_all"`
+	ID                    frameworktypes.String `tfsdk:"id"`
+	AssistantArn          frameworktypes.String `tfsdk:"assistant_arn"`
+	Name                  frameworktypes.String `tfsdk:"name"`
+	Type                  frameworktypes.String `tfsdk:"type"`
+	Description           frameworktypes.String `tfsdk:"description"`
+	Tags                  frameworktypes.Map    `tfsdk:"tags"`
+	TagsAll               frameworktypes.Map    `tfsdk:"tags_all"`
 }
 
 func (r *WisdomAssistantResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

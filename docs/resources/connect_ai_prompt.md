@@ -45,5 +45,6 @@ AI Prompts allow you to configure custom prompts for Amazon Q in Connect, contro
 - `assistant_arn` (String) The Amazon Resource Name (ARN) of the Amazon Q in Connect assistant
 - `id` (String) The identifier of the AI Prompt
 - `modified_time` (String) The time the AI Prompt was last modified (RFC3339 format)
+- `qualified_id` (String) The AI Prompt ID with version qualifier appended (e.g., `id:version_number`). Use this to reference the prompt from AI Agent resources
 - `status` (String) The status of the AI Prompt
 - `version_number` (Number) The version number of the AI Prompt (populated when `create_version` is true)
