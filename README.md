@@ -8,8 +8,12 @@ The ConnectRacer provider enables Terraform management of AWS Connect and relate
 All resources in this provider automatically add the **`AmazonConnectEnabled = "True"` tag** required for AWS Connect service-linked role access. This tag is:
 - Automatically added during resource creation if not provided
 - Preserved during updates
-- Stored in Terraform state after creation
-- Cannot be accidentally removed
+- Available in the `tags_all` computed attribute
+- User-provided tags are kept separate in the `tags` attribute
+
+#### Tag Attributes
+- **`tags`** (Optional): User-defined tags only. This attribute contains exactly what you configure, without any provider-added tags.
+- **`tags_all`** (Computed): All tags including the provider-added `AmazonConnectEnabled = "True"`. Use this in outputs or data sources when you need to see all tags.
 ## Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
@@ -27,19 +31,23 @@ All resources in this provider automatically add the **`AmazonConnectEnabled = "
 task dev-install
 ```
 
+## Using the provider
+
+```bash
+terraform init -upgrade
+```
+
 ### Override example
 
 
 ```json
 provider_installation {
-
-  dev_overrides {
-      "tecracer/connectracer" = "/Users/johndoe/connectracer"
+  filesystem_mirror {
+    path    = "/Users/gernotglawe/.terraform.d/plugins"
+    include = ["registry.terraform.io/tecracer/connectracer"]
   }
-
-  # For all other providers, install them directly from their origin provider
-  # registries as normal. If you omit this, Terraform will _only_ use
-  # the dev_overrides block, and so no other providers will be available.
-  direct {}
+  direct {
+    exclude = ["registry.terraform.io/tecracer/connectracer"]
+  }
 }
 ```

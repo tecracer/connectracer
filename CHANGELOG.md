@@ -5,10 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-05-11
+### Added 
+  - connectracer_connect_ai_prompt
+  - 
+## [0.1.8] - 2026-05-11
+### Added
+  - Approved Origins (https://docs.aws.amazon.com/connect/latest/APIReference/API_AssociateApprovedOrigin.html)
+
 ## [0.1.7] - 2026-05-07
   - Numbering skips due to deployment restrictions
 ### Added
-  - connect rules, see https://docs.aws.amazon.com/connect/latest/APIReference/rules-api.html
+  - connect rules, see https://docs.aws.amazon.com/connect/latest/APIReference/rules-api.html (not tested)
 
 ## [0.1.3] - 2026-05-07
 
