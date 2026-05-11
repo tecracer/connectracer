@@ -1,8 +1,8 @@
 terraform {
   required_providers {
     connectracer = {
-
-      source = "github.com/tecracer/connectracer"
+      source  = "registry.terraform.io/tecracer/connectracer"
+      version = "0.1.2"
     }
   }
 }
