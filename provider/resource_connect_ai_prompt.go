@@ -221,6 +221,10 @@ func (r *ConnectAIPromptResource) Configure(ctx context.Context, req resource.Co
 	r.client = clients.QConnect
 }
 
+func trimTrailingWhitespace(content string) string {
+  return strings.TrimRight(content, " \t\n\r")
+}
+
 func (r *ConnectAIPromptResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data ConnectAIPromptResourceModel
 
@@ -230,7 +234,7 @@ func (r *ConnectAIPromptResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	templateText := strings.TrimRight(data.TemplateText.ValueString(), " \t\n\r")
+	templateText := trimTrailingWhitespace(data.TemplateText.ValueString())
 
 	input := &qconnect.CreateAIPromptInput{
 		AssistantId:      aws.String(data.AssistantID.ValueString()),
@@ -536,7 +540,13 @@ func (r *ConnectAIPromptResource) readAndPopulateModel(ctx context.Context, data
 		switch tc := prompt.TemplateConfiguration.(type) {
 		case *types.AIPromptTemplateConfigurationMemberTextFullAIPromptEditTemplateConfiguration:
 			if tc.Value.Text != nil {
-				data.TemplateText = frameworktypes.StringValue(*tc.Value.Text)
+				apiValue := *tc.Value.Text
+				// Compare trimmed versions: if they match, keep the original plan/state value
+				// to avoid "inconsistent result after apply" errors caused by trailing whitespace differences
+				if strings.TrimRight(apiValue, " \t\n\r") != strings.TrimRight(data.TemplateText.ValueString(), " \t\n\r") {
+					data.TemplateText = frameworktypes.StringValue(apiValue)
+				}
+				// else: keep data.TemplateText as-is (preserves the user's config value)
 			}
 		}
 	}
