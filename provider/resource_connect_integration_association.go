@@ -220,18 +220,94 @@ func (r *ConnectIntegrationAssociationResource) Create(ctx context.Context, req 
 		"integration_association_id": data.ID.ValueString(),
 	})
 
-	// Read back to get complete state
-	readReq := resource.ReadRequest{State: resp.State}
-	readResp := &resource.ReadResponse{State: resp.State, Diagnostics: resp.Diagnostics}
-	
-	// Temporarily save to state so Read can access it
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
+	// List integration associations to get complete state
+	// Note: AWS Connect doesn't have a DescribeIntegrationAssociation API,
+	// so we need to list and filter
+	listInput := &connect.ListIntegrationAssociationsInput{
+		InstanceId: aws.String(data.InstanceID.ValueString()),
+	}
+
+	var found bool
+	paginator := connect.NewListIntegrationAssociationsPaginator(r.client, listInput)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error reading Connect Integration Association",
+				fmt.Sprintf("Unable to list integration associations, got error: %s", err),
+			)
+			return
+		}
+
+		for _, association := range page.IntegrationAssociationSummaryList {
+			if association.IntegrationAssociationId != nil &&
+				*association.IntegrationAssociationId == data.ID.ValueString() {
+				// Found our association - populate all fields
+				found = true
+				data.IntegrationAssociationArn = frameworktypes.StringPointerValue(association.IntegrationAssociationArn)
+				data.IntegrationType = frameworktypes.StringValue(string(association.IntegrationType))
+				data.IntegrationArn = frameworktypes.StringPointerValue(association.IntegrationArn)
+
+				// Handle optional fields - use null if not present
+				if association.SourceApplicationUrl != nil && *association.SourceApplicationUrl != "" {
+					data.SourceApplicationURL = frameworktypes.StringPointerValue(association.SourceApplicationUrl)
+				} else {
+					data.SourceApplicationURL = frameworktypes.StringNull()
+				}
+
+				if association.SourceApplicationName != nil && *association.SourceApplicationName != "" {
+					data.SourceApplicationName = frameworktypes.StringPointerValue(association.SourceApplicationName)
+				} else {
+					data.SourceApplicationName = frameworktypes.StringNull()
+				}
+
+				// SourceType might be empty for WISDOM integrations
+				if association.SourceType != "" {
+					data.SourceType = frameworktypes.StringValue(string(association.SourceType))
+				} else {
+					data.SourceType = frameworktypes.StringNull()
+				}
+				break
+			}
+		}
+
+		if found {
+			break
+		}
+	}
+
+	if !found {
+		resp.Diagnostics.AddError(
+			"Connect Integration Association Not Found",
+			fmt.Sprintf("Integration association %s not found after creation in instance %s", data.ID.ValueString(), data.InstanceID.ValueString()),
+		)
 		return
 	}
-	
-	r.Read(ctx, readReq, readResp)
-	resp.Diagnostics = readResp.Diagnostics
+
+	// Get tags using ListTagsForResource
+	tagsInput := &connect.ListTagsForResourceInput{
+		ResourceArn: aws.String(data.IntegrationAssociationArn.ValueString()),
+	}
+
+	tagsOutput, err := r.client.ListTagsForResource(ctx, tagsInput)
+	if err != nil {
+		// Tags might not be supported for this resource type, just log and continue
+		tflog.Warn(ctx, "Unable to read tags for integration association", map[string]interface{}{
+			"error": err.Error(),
+		})
+	} else if tagsOutput != nil && len(tagsOutput.Tags) > 0 {
+		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tagsOutput.Tags)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		data.Tags = tagsMap
+	} else {
+		data.Tags = frameworktypes.MapNull(frameworktypes.StringType)
+	}
+
+	// Save complete data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ConnectIntegrationAssociationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

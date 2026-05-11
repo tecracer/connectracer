@@ -40,6 +40,7 @@ type WisdomAssistantResourceModel struct {
 	Type         frameworktypes.String `tfsdk:"type"`
 	Description  frameworktypes.String `tfsdk:"description"`
 	Tags         frameworktypes.Map    `tfsdk:"tags"`
+	TagsAll      frameworktypes.Map    `tfsdk:"tags_all"`
 }
 
 func (r *WisdomAssistantResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -78,8 +79,12 @@ func (r *WisdomAssistantResource) Schema(ctx context.Context, req resource.Schem
 				Optional:            true,
 			},
 			"tags": schema.MapAttribute{
-				MarkdownDescription: "Tags to apply to the assistant. The `AmazonConnectEnabled = \"True\"` tag is automatically added if not present.",
+				MarkdownDescription: "User-defined tags to apply to the assistant.",
 				Optional:            true,
+				ElementType:         frameworktypes.StringType,
+			},
+			"tags_all": schema.MapAttribute{
+				MarkdownDescription: "All tags including provider-added tags. The `AmazonConnectEnabled = \"True\"` tag is automatically added.",
 				Computed:            true,
 				ElementType:         frameworktypes.StringType,
 			},
@@ -114,7 +119,7 @@ func (r *WisdomAssistantResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	// Ensure required tags
-	tags, err := ensureRequiredTags(ctx, data.Tags)
+	allTags, err := ensureRequiredTags(ctx, data.Tags)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
 		return
@@ -124,7 +129,7 @@ func (r *WisdomAssistantResource) Create(ctx context.Context, req resource.Creat
 	input := &wisdom.CreateAssistantInput{
 		Name: aws.String(data.Name.ValueString()),
 		Type: types.AssistantType(data.Type.ValueString()),
-		Tags: tags,
+		Tags: allTags,
 	}
 
 	if !data.Description.IsNull() {
@@ -149,11 +154,13 @@ func (r *WisdomAssistantResource) Create(ctx context.Context, req resource.Creat
 	data.ID = frameworktypes.StringValue(*result.Assistant.AssistantId)
 	data.AssistantArn = frameworktypes.StringValue(*result.Assistant.AssistantArn)
 
-	// Store tags back in state
-	tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tags)
+	// Note: data.Tags already contains user-provided tags from plan
+	
+	// Store all tags (including provider-added) in state.TagsAll
+	tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 	resp.Diagnostics.Append(diags...)
 	if !resp.Diagnostics.HasError() {
-		data.Tags = tagsMap
+		data.TagsAll = tagsAllMap
 	}
 
 	tflog.Trace(ctx, "Created Wisdom Assistant", map[string]interface{}{
@@ -192,13 +199,15 @@ func (r *WisdomAssistantResource) Read(ctx context.Context, req resource.ReadReq
 		data.Description = frameworktypes.StringValue(*result.Assistant.Description)
 	}
 
+	// Populate tags_all from AWS response
 	if result.Assistant.Tags != nil {
-		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, result.Assistant.Tags)
+		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, result.Assistant.Tags)
 		resp.Diagnostics.Append(diags...)
 		if !resp.Diagnostics.HasError() {
-			data.Tags = tagsMap
+			data.TagsAll = tagsAllMap
 		}
 	}
+	// Note: data.Tags is preserved from plan/config, not overwritten from AWS
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -212,7 +221,7 @@ func (r *WisdomAssistantResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	// Ensure required tags
-	tags, err := ensureRequiredTags(ctx, data.Tags)
+	allTags, err := ensureRequiredTags(ctx, data.Tags)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
 		return
@@ -224,7 +233,7 @@ func (r *WisdomAssistantResource) Update(ctx context.Context, req resource.Updat
 	// Update tags
 	_, err = r.client.TagResource(ctx, &wisdom.TagResourceInput{
 		ResourceArn: aws.String(data.AssistantArn.ValueString()),
-		Tags:        tags,
+		Tags:        allTags,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -234,11 +243,13 @@ func (r *WisdomAssistantResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	// Store tags back in state
-	tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tags)
+	// Note: data.Tags already contains user-provided tags from plan
+	
+	// Store all tags (including provider-added) in state.TagsAll
+	tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 	resp.Diagnostics.Append(diags...)
 	if !resp.Diagnostics.HasError() {
-		data.Tags = tagsMap
+		data.TagsAll = tagsAllMap
 	}
 
 	tflog.Trace(ctx, "Updated Wisdom Assistant", map[string]interface{}{

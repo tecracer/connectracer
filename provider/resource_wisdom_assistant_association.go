@@ -42,6 +42,7 @@ type WisdomAssistantAssociationResourceModel struct {
 	AssociationType          frameworktypes.String                    `tfsdk:"association_type"`
 	AssociationData          *AssociationDataModel                    `tfsdk:"association_data"`
 	Tags                     frameworktypes.Map                       `tfsdk:"tags"`
+	TagsAll                  frameworktypes.Map                       `tfsdk:"tags_all"`
 }
 
 // AssociationDataModel describes the association data nested block.
@@ -100,8 +101,12 @@ func (r *WisdomAssistantAssociationResource) Schema(ctx context.Context, req res
 				},
 			},
 			"tags": schema.MapAttribute{
-				MarkdownDescription: "Tags to apply to the assistant association. The `AmazonConnectEnabled = \"True\"` tag is automatically added if not present.",
+				MarkdownDescription: "User-defined tags to apply to the assistant association.",
 				Optional:            true,
+				ElementType:         frameworktypes.StringType,
+			},
+			"tags_all": schema.MapAttribute{
+				MarkdownDescription: "All tags including provider-added tags. The `AmazonConnectEnabled = \"True\"` tag is automatically added.",
 				Computed:            true,
 				ElementType:         frameworktypes.StringType,
 			},
@@ -140,7 +145,7 @@ func (r *WisdomAssistantAssociationResource) Create(ctx context.Context, req res
 	}
 
 	// Ensure required tags
-	tags, err := ensureRequiredTags(ctx, data.Tags)
+	allTags, err := ensureRequiredTags(ctx, data.Tags)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
 		return
@@ -150,7 +155,7 @@ func (r *WisdomAssistantAssociationResource) Create(ctx context.Context, req res
 	input := &wisdom.CreateAssistantAssociationInput{
 		AssistantId:     aws.String(data.AssistantID.ValueString()),
 		AssociationType: types.AssociationType(data.AssociationType.ValueString()),
-		Tags:            tags,
+		Tags:            allTags,
 	}
 
 	// Add association data
@@ -192,18 +197,21 @@ func (r *WisdomAssistantAssociationResource) Create(ctx context.Context, req res
 			}
 		}
 
-		// Store tags back in state
-		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tags)
+		// Note: data.Tags already contains user-provided tags from plan
+		
+		// Store all tags (including provider-added) in state.TagsAll
+		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 		resp.Diagnostics.Append(diags...)
 		if !resp.Diagnostics.HasError() {
-			data.Tags = tagsMap
+			data.TagsAll = tagsAllMap
 		}
 	} else {
 		// If API didn't return tags, still store what we sent
-		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tags)
+		// Note: data.Tags already contains user-provided tags from plan
+		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 		resp.Diagnostics.Append(diags...)
 		if !resp.Diagnostics.HasError() {
-			data.Tags = tagsMap
+			data.TagsAll = tagsAllMap
 		}
 	}
 
@@ -263,16 +271,17 @@ func (r *WisdomAssistantAssociationResource) Read(ctx context.Context, req resou
 			data.AssociationData = nil
 		}
 
-		// Map tags
+		// Populate tags_all from AWS response
 		if len(output.AssistantAssociation.Tags) > 0 {
-			tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, output.AssistantAssociation.Tags)
+			tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, output.AssistantAssociation.Tags)
 			resp.Diagnostics.Append(diags...)
 			if !resp.Diagnostics.HasError() {
-				data.Tags = tagsMap
+				data.TagsAll = tagsAllMap
 			}
 		} else {
-			data.Tags = frameworktypes.MapNull(frameworktypes.StringType)
+			data.TagsAll = frameworktypes.MapNull(frameworktypes.StringType)
 		}
+		// Note: data.Tags is preserved from plan/config, not overwritten from AWS
 	}
 
 	// Save updated data into Terraform state
@@ -303,7 +312,7 @@ func (r *WisdomAssistantAssociationResource) Update(ctx context.Context, req res
 		associationArn := state.AssistantAssociationArn.ValueString()
 
 		// Ensure required tags for new tags
-		newTags, err := ensureRequiredTags(ctx, data.Tags)
+		allTags, err := ensureRequiredTags(ctx, data.Tags)
 		if err != nil {
 			resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
 			return
@@ -322,7 +331,7 @@ func (r *WisdomAssistantAssociationResource) Update(ctx context.Context, req res
 		// Determine tags to remove
 		var tagsToRemove []string
 		for key := range oldTags {
-			if _, exists := newTags[key]; !exists {
+			if _, exists := allTags[key]; !exists {
 				tagsToRemove = append(tagsToRemove, key)
 			}
 		}
@@ -344,10 +353,10 @@ func (r *WisdomAssistantAssociationResource) Update(ctx context.Context, req res
 		}
 
 		// Add new/updated tags
-		if len(newTags) > 0 {
+		if len(allTags) > 0 {
 			tagInput := &wisdom.TagResourceInput{
 				ResourceArn: aws.String(associationArn),
-				Tags:        newTags,
+				Tags:        allTags,
 			}
 			_, err := r.client.TagResource(ctx, tagInput)
 			if err != nil {

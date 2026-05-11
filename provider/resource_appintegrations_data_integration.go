@@ -40,6 +40,7 @@ type AppIntegrationsDataIntegrationResourceModel struct {
 	SourceURI   frameworktypes.String `tfsdk:"source_uri"`
 	KmsKey      frameworktypes.String `tfsdk:"kms_key"`
 	Tags        frameworktypes.Map    `tfsdk:"tags"`
+	TagsAll     frameworktypes.Map    `tfsdk:"tags_all"`
 }
 
 func (r *AppIntegrationsDataIntegrationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -91,8 +92,12 @@ func (r *AppIntegrationsDataIntegrationResource) Schema(ctx context.Context, req
 				},
 			},
 			"tags": schema.MapAttribute{
-				MarkdownDescription: "Tags to apply to the data integration. The `AmazonConnectEnabled = \"True\"` tag is automatically added if not present.",
+				MarkdownDescription: "User-defined tags to apply to the data integration.",
 				Optional:            true,
+				ElementType:         frameworktypes.StringType,
+			},
+			"tags_all": schema.MapAttribute{
+				MarkdownDescription: "All tags including provider-added tags. The `AmazonConnectEnabled = \"True\"` tag is automatically added.",
 				Computed:            true,
 				ElementType:         frameworktypes.StringType,
 			},
@@ -126,7 +131,7 @@ func (r *AppIntegrationsDataIntegrationResource) Create(ctx context.Context, req
 	}
 
 	// Ensure required tags
-	tags, err := ensureRequiredTags(ctx, data.Tags)
+	allTags, err := ensureRequiredTags(ctx, data.Tags)
 	if err != nil {
 		resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
 		return
@@ -135,7 +140,7 @@ func (r *AppIntegrationsDataIntegrationResource) Create(ctx context.Context, req
 	input := &appintegrations.CreateDataIntegrationInput{
 		Name:      aws.String(data.Name.ValueString()),
 		SourceURI: aws.String(data.SourceURI.ValueString()),
-		Tags:      tags,
+		Tags:      allTags,
 	}
 
 	if !data.Description.IsNull() {
@@ -172,19 +177,20 @@ func (r *AppIntegrationsDataIntegrationResource) Create(ctx context.Context, req
 		data.KmsKey = frameworktypes.StringPointerValue(output.KmsKey)
 	}
 
-	// Store tags back in state
+	// Note: data.Tags already contains user-provided tags from plan
+	// Store all tags (including provider-added) in state.TagsAll
 	if len(output.Tags) > 0 {
-		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, output.Tags)
+		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, output.Tags)
 		resp.Diagnostics.Append(diags...)
 		if !resp.Diagnostics.HasError() {
-			data.Tags = tagsMap
+			data.TagsAll = tagsAllMap
 		}
 	} else {
 		// If API doesn't return tags, use what we sent
-		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, tags)
+		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 		resp.Diagnostics.Append(diags...)
 		if !resp.Diagnostics.HasError() {
-			data.Tags = tagsMap
+			data.TagsAll = tagsAllMap
 		}
 	}
 
@@ -234,15 +240,17 @@ func (r *AppIntegrationsDataIntegrationResource) Read(ctx context.Context, req r
 		data.KmsKey = frameworktypes.StringNull()
 	}
 
+	// Populate tags_all from AWS response
 	if len(output.Tags) > 0 {
-		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, output.Tags)
+		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, output.Tags)
 		resp.Diagnostics.Append(diags...)
 		if !resp.Diagnostics.HasError() {
-			data.Tags = tagsMap
+			data.TagsAll = tagsAllMap
 		}
 	} else {
-		data.Tags = frameworktypes.MapNull(frameworktypes.StringType)
+		data.TagsAll = frameworktypes.MapNull(frameworktypes.StringType)
 	}
+	// Note: data.Tags is preserved from plan/config, not overwritten from AWS
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -283,7 +291,7 @@ func (r *AppIntegrationsDataIntegrationResource) Update(ctx context.Context, req
 		dataIntegrationArn := state.Arn.ValueString()
 
 		// Ensure required tags in new tags
-		newTags, err := ensureRequiredTags(ctx, data.Tags)
+		allTags, err := ensureRequiredTags(ctx, data.Tags)
 		if err != nil {
 			resp.Diagnostics.AddError("Tag Error", fmt.Sprintf("Unable to process tags: %s", err))
 			return
@@ -300,7 +308,7 @@ func (r *AppIntegrationsDataIntegrationResource) Update(ctx context.Context, req
 
 		var tagsToRemove []string
 		for key := range oldTags {
-			if _, exists := newTags[key]; !exists {
+			if _, exists := allTags[key]; !exists {
 				tagsToRemove = append(tagsToRemove, key)
 			}
 		}
@@ -320,10 +328,10 @@ func (r *AppIntegrationsDataIntegrationResource) Update(ctx context.Context, req
 			}
 		}
 
-		if len(newTags) > 0 {
+		if len(allTags) > 0 {
 			tagInput := &appintegrations.TagResourceInput{
 				ResourceArn: aws.String(dataIntegrationArn),
-				Tags:        newTags,
+				Tags:        allTags,
 			}
 			_, err := r.client.TagResource(ctx, tagInput)
 			if err != nil {
@@ -336,10 +344,11 @@ func (r *AppIntegrationsDataIntegrationResource) Update(ctx context.Context, req
 		}
 
 		// Update state with new tags
-		tagsMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, newTags)
+		// Note: data.Tags already contains user-provided tags from plan
+		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 		resp.Diagnostics.Append(diags...)
 		if !resp.Diagnostics.HasError() {
-			data.Tags = tagsMap
+			data.TagsAll = tagsAllMap
 		}
 	}
 
