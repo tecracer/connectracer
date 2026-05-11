@@ -61,6 +61,10 @@ tasks:
       - rm -rf {{.DIST_DIR}}
 
   default:
-    desc: Default task - build the provider
     cmds:
-      - task: build
+      - task -l
+
+  gendoc:
+    desc: Generate documentation
+    cmds:
+      - cd tools; go generate ./...

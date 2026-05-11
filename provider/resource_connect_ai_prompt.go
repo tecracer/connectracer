@@ -56,6 +56,7 @@ type ConnectAIPromptResourceModel struct {
 	Tags                   frameworktypes.Map     `tfsdk:"tags"`
 	CreateVersion          frameworktypes.Bool    `tfsdk:"create_version"`
 	VersionNumber          frameworktypes.Int64   `tfsdk:"version_number"`
+	QualifiedID            frameworktypes.String  `tfsdk:"qualified_id"`
 	MaxTokensToSample      frameworktypes.Int32   `tfsdk:"max_tokens_to_sample"`
 	Temperature            frameworktypes.Float32 `tfsdk:"temperature"`
 	TopK                   frameworktypes.Int32   `tfsdk:"top_k"`
@@ -165,6 +166,10 @@ func (r *ConnectAIPromptResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"version_number": schema.Int64Attribute{
 				MarkdownDescription: "The version number of the AI Prompt (populated when `create_version` is true)",
+				Computed:            true,
+			},
+			"qualified_id": schema.StringAttribute{
+				MarkdownDescription: "The AI Prompt ID with version qualifier appended (e.g., `id:version_number`). Use this to reference the prompt from AI Agent resources",
 				Computed:            true,
 			},
 			"max_tokens_to_sample": schema.Int32Attribute{
@@ -326,6 +331,9 @@ func (r *ConnectAIPromptResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
+	// Compute qualified_id (id:version_number)
+	data.QualifiedID = r.computeQualifiedID(&data)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -348,6 +356,9 @@ func (r *ConnectAIPromptResource) Read(ctx context.Context, req resource.ReadReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Compute qualified_id (id:version_number)
+	data.QualifiedID = r.computeQualifiedID(&data)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -426,6 +437,9 @@ func (r *ConnectAIPromptResource) Update(ctx context.Context, req resource.Updat
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Compute qualified_id (id:version_number)
+	data.QualifiedID = r.computeQualifiedID(&data)
 
 	tflog.Trace(ctx, "Updated AI Prompt resource")
 
@@ -623,6 +637,20 @@ func (r *ConnectAIPromptResource) createVersion(ctx context.Context, assistantID
 	})
 
 	return versionNumber, nil
+}
+
+// computeQualifiedID computes the qualified ID (id:version_number) for referencing
+// the AI Prompt from other resources like AI Agents.
+func (r *ConnectAIPromptResource) computeQualifiedID(data *ConnectAIPromptResourceModel) frameworktypes.String {
+	if data.ID.IsNull() || data.ID.IsUnknown() {
+		return frameworktypes.StringNull()
+	}
+	if data.VersionNumber.IsNull() || data.VersionNumber.IsUnknown() {
+		// No version available, return just the ID
+		return data.ID
+	}
+	qualified := fmt.Sprintf("%s:%d", data.ID.ValueString(), data.VersionNumber.ValueInt64())
+	return frameworktypes.StringValue(qualified)
 }
 
 // buildInferenceConfiguration builds the inference configuration from the model.

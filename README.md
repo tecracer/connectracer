@@ -39,15 +39,15 @@ terraform init -upgrade
 
 ### Override example
 
+File `~/.terraformrc`
 
 ```json
 provider_installation {
   filesystem_mirror {
-    path    = "/Users/gernotglawe/.terraform.d/plugins"
+    path    = "/Users/joendoe/.terraform.d/plugins"
     include = ["registry.terraform.io/tecracer/connectracer"]
   }
   direct {
     exclude = ["registry.terraform.io/tecracer/connectracer"]
   }
-}
 ```
