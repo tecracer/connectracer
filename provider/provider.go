@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/appintegrations"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
 	"github.com/aws/aws-sdk-go-v2/service/connect"
 	"github.com/aws/aws-sdk-go-v2/service/qconnect"
 	"github.com/aws/aws-sdk-go-v2/service/wisdom"
@@ -58,10 +59,11 @@ type ConnectracerProviderModel struct {
 
 // ProviderClients holds the AWS service clients.
 type ProviderClients struct {
-	Wisdom          *wisdom.Client
-	QConnect        *qconnect.Client
-	AppIntegrations *appintegrations.Client
-	Connect         *connect.Client
+	Wisdom                 *wisdom.Client
+	QConnect               *qconnect.Client
+	AppIntegrations        *appintegrations.Client
+	Connect                *connect.Client
+	BedrockAgentCoreControl *bedrockagentcorecontrol.Client
 }
 
 func (p *connectracerProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -117,12 +119,16 @@ func (p *connectracerProvider) Configure(ctx context.Context, req provider.Confi
 	// Create AWS Connect client
 	connectClient := connect.NewFromConfig(cfg)
 
+	// Create AWS Bedrock AgentCore Control client
+	bedrockAgentCoreControlClient := bedrockagentcorecontrol.NewFromConfig(cfg)
+
 	// Store all clients in a struct for resources to access
 	clients := &ProviderClients{
-		Wisdom:          wisdomClient,
-		QConnect:        qconnectClient,
-		AppIntegrations: appIntegrationsClient,
-		Connect:         connectClient,
+		Wisdom:                 wisdomClient,
+		QConnect:               qconnectClient,
+		AppIntegrations:        appIntegrationsClient,
+		Connect:                connectClient,
+		BedrockAgentCoreControl: bedrockAgentCoreControlClient,
 	}
 
 	// Make the clients available to data sources and resources
@@ -138,6 +144,7 @@ func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.
 		NewQConnectKnowledgeBaseResource,
 		NewWisdomAssistantAssociationResource,
 		NewAppIntegrationsDataIntegrationResource,
+		NewConnectAppIntegrationResource,
 		NewConnectIntegrationAssociationResource,
 		NewConnectRuleResource,
 		NewInstanceApprovedOriginsResource,
@@ -158,6 +165,7 @@ func (p *connectracerProvider) DataSources(ctx context.Context) []func() datasou
 		NewWisdomKnowledgeBasesDataSource,
 		NewWisdomAssistantsDataSource,
 		NewQConnectKnowledgeBaseDataSource,
+		NewBedrockAgentCoreGatewayDataSource,
 	}
 }
 
