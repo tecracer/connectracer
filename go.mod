@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
 	github.com/aws/aws-sdk-go-v2/service/appintegrations v1.37.9
 	github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.37.0
-	github.com/aws/aws-sdk-go-v2/service/connect v1.172.1
+	github.com/aws/aws-sdk-go-v2/service/connect v1.173.0
 	github.com/aws/aws-sdk-go-v2/service/qconnect v1.30.0
 	github.com/aws/aws-sdk-go-v2/service/wisdom v1.32.23
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
