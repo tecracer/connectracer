@@ -25,8 +25,8 @@ github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24 h1:OQqn11BtaYv1WLUowvcA30MpzIu
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24/go.mod h1:X5ZJyfwVrWA96GzPmUCWFQaEARPR7gCrpq2E92PJwAE=
 github.com/aws/aws-sdk-go-v2/service/appintegrations v1.37.9 h1:e51YjJHGLC86GPxLox3PNwnlbgMbLPJ7Ph4vcTeM4GY=
 github.com/aws/aws-sdk-go-v2/service/appintegrations v1.37.9/go.mod h1:EhPRMWYqp8CDlJ/EEYNegsBOTTJRN6HbNaUCQ9J7JGw=
-github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.37.0 h1:tduBoWn9F58J/mg2CCmM9ONwoYDvfm/I2fxHsfKs1SU=
-github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.37.0/go.mod h1:WXGqnCrWtpgiig7ymwkNHdGvWF7FJtGvx8ldK/yy5BQ=
+github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.38.0 h1:x+SUDjkhFOT+f9IPZXewia7EYgWi7KgNsoJ743TdQdY=
+github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.38.0/go.mod h1:WXGqnCrWtpgiig7ymwkNHdGvWF7FJtGvx8ldK/yy5BQ=
 github.com/aws/aws-sdk-go-v2/service/connect v1.172.1 h1:aHqy/dANNJHJlgjDs/8exwtHMeHDWCVG+L1T/0+7hps=
 github.com/aws/aws-sdk-go-v2/service/connect v1.172.1/go.mod h1:Du5pBjluSAHkGpEiz8aCfk9NdndzEeGpCqARDWAlGGQ=
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.9 h1:FLudkZLt5ci0ozzgkVo8BJGwvqNaZbTWb3UcucAateA=
