@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/appintegrations"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
 	"github.com/aws/aws-sdk-go-v2/service/connect"
+	"github.com/aws/aws-sdk-go-v2/service/lexmodelsv2"
 	"github.com/aws/aws-sdk-go-v2/service/qconnect"
 	"github.com/aws/aws-sdk-go-v2/service/wisdom"
 	"github.com/hashicorp/terraform-plugin-framework/action"
@@ -59,11 +60,12 @@ type ConnectracerProviderModel struct {
 
 // ProviderClients holds the AWS service clients.
 type ProviderClients struct {
-	Wisdom                 *wisdom.Client
-	QConnect               *qconnect.Client
-	AppIntegrations        *appintegrations.Client
-	Connect                *connect.Client
+	Wisdom                  *wisdom.Client
+	QConnect                *qconnect.Client
+	AppIntegrations         *appintegrations.Client
+	Connect                 *connect.Client
 	BedrockAgentCoreControl *bedrockagentcorecontrol.Client
+	LexModelsV2             *lexmodelsv2.Client
 }
 
 func (p *connectracerProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -122,13 +124,17 @@ func (p *connectracerProvider) Configure(ctx context.Context, req provider.Confi
 	// Create AWS Bedrock AgentCore Control client
 	bedrockAgentCoreControlClient := bedrockagentcorecontrol.NewFromConfig(cfg)
 
+	// Create AWS Lex Models V2 client
+	lexModelsV2Client := lexmodelsv2.NewFromConfig(cfg)
+
 	// Store all clients in a struct for resources to access
 	clients := &ProviderClients{
-		Wisdom:                 wisdomClient,
-		QConnect:               qconnectClient,
-		AppIntegrations:        appIntegrationsClient,
-		Connect:                connectClient,
+		Wisdom:                  wisdomClient,
+		QConnect:                qconnectClient,
+		AppIntegrations:         appIntegrationsClient,
+		Connect:                 connectClient,
 		BedrockAgentCoreControl: bedrockAgentCoreControlClient,
+		LexModelsV2:             lexModelsV2Client,
 	}
 
 	// Make the clients available to data sources and resources
@@ -150,6 +156,7 @@ func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.
 		NewInstanceApprovedOriginsResource,
 		NewConnectAIPromptResource,
 		NewConnectAIAgentResource,
+		NewQInConnectIntentResource,
 	}
 }
 
