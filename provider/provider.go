@@ -156,7 +156,9 @@ func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.
 		NewInstanceApprovedOriginsResource,
 		NewConnectAIPromptResource,
 		NewConnectAIAgentResource,
+		NewConnectAIToolResource,
 		NewQInConnectIntentResource,
+		NewConnectViewResource,
 	}
 }
 

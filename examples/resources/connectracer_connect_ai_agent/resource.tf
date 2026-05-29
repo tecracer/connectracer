@@ -77,3 +77,27 @@ resource "connectracer_connect_ai_agent" "self_service" {
     }
   }
 }
+
+# AI Agent for Orchestration
+# Tool configurations are managed separately via connectracer_connect_ai_tool resources.
+# See examples/resources/connectracer_connect_ai_tool for the full pattern.
+resource "connectracer_connect_ai_agent" "orchestration" {
+  assistant_id      = "12345678-1234-1234-1234-123456789012"
+  name              = "orchestration-agent"
+  type              = "ORCHESTRATION"
+  visibility_status = "PUBLISHED"
+  description       = "Orchestration AI Agent with tool-based escalation"
+  create_version    = true
+
+  orchestration_configuration {
+    orchestration_ai_prompt_id    = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    orchestration_ai_guardrail_id = "gggggggg-hhhh-iiii-jjjj-kkkkkkkkkkkk"
+    connect_instance_arn          = "arn:aws:connect:eu-central-1:123456789012:instance/ffffffff-1111-2222-3333-444444444444"
+    locale                        = "en_US"
+  }
+
+  tags = {
+    Environment = "production"
+    Workshop    = "agent-escalation"
+  }
+}

@@ -26,6 +26,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &ConnectAIAgentResource{}
 var _ resource.ResourceWithImportState = &ConnectAIAgentResource{}
+var _ resource.ResourceWithModifyPlan = &ConnectAIAgentResource{}
 
 func NewConnectAIAgentResource() resource.Resource {
 	return &ConnectAIAgentResource{}
@@ -56,6 +57,7 @@ type ConnectAIAgentResourceModel struct {
 	AnswerRecommendationConfiguration []AnswerRecommendationConfigModel    `tfsdk:"answer_recommendation_configuration"`
 	ManualSearchConfiguration         []ManualSearchConfigModel            `tfsdk:"manual_search_configuration"`
 	SelfServiceConfiguration          []SelfServiceConfigModel             `tfsdk:"self_service_configuration"`
+	OrchestrationConfiguration        []OrchestrationConfigModel           `tfsdk:"orchestration_configuration"`
 }
 
 type AnswerRecommendationConfigModel struct {
@@ -81,6 +83,15 @@ type SelfServiceConfigModel struct {
 	AssociationConfigurations             []AssociationConfigModel `tfsdk:"association_configurations"`
 }
 
+type OrchestrationConfigModel struct {
+	OrchestrationAIPromptId    frameworktypes.String `tfsdk:"orchestration_ai_prompt_id"`
+	OrchestrationAIGuardrailId frameworktypes.String `tfsdk:"orchestration_ai_guardrail_id"`
+	ConnectInstanceArn         frameworktypes.String `tfsdk:"connect_instance_arn"`
+	Locale                     frameworktypes.String `tfsdk:"locale"`
+}
+
+
+
 type AssociationConfigModel struct {
 	AssociationID              frameworktypes.String        `tfsdk:"association_id"`
 	AssociationType            frameworktypes.String        `tfsdk:"association_type"`
@@ -90,6 +101,68 @@ type AssociationConfigModel struct {
 type KnowledgeBaseConfigModel struct {
 	MaxResults                      frameworktypes.Int32  `tfsdk:"max_results"`
 	OverrideKnowledgeBaseSearchType frameworktypes.String `tfsdk:"override_knowledge_base_search_type"`
+}
+
+func (r *ConnectAIAgentResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Skip destroy plans.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	// Skip creates — no prior state, UseStateForUnknown() does not apply.
+	if req.State.Raw.IsNull() {
+		return
+	}
+
+	// modified_time is updated by AWS on every UpdateAIAgent call.
+	// Mark it Unknown so Terraform accepts the new timestamp after apply.
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("modified_time"), frameworktypes.StringUnknown())...)
+
+	var createVersion frameworktypes.Bool
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("create_version"), &createVersion)...)
+	if resp.Diagnostics.HasError() || createVersion.IsNull() || createVersion.IsUnknown() || !createVersion.ValueBool() {
+		return
+	}
+
+	// Read the current version_number live from AWS. A version could have been
+	// created outside of Terraform (console / CLI), making the local state stale.
+	// This is especially important for `terraform plan -refresh=false`, where Read
+	// is not called and the state might not reflect the actual current version.
+	// The live value becomes the accurate "before" baseline in the plan diff;
+	// we then immediately mark the planned value Unknown because apply will
+	// produce a new (higher) version number that is not yet known.
+	if r.client != nil {
+		var assistantID, agentID frameworktypes.String
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("assistant_id"), &assistantID)...)
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("id"), &agentID)...)
+		if !resp.Diagnostics.HasError() && !assistantID.IsNull() && !agentID.IsNull() {
+			output, err := r.client.GetAIAgent(ctx, &qconnect.GetAIAgentInput{
+				AssistantId: aws.String(assistantID.ValueString()),
+				AiAgentId:   aws.String(agentID.ValueString()),
+			})
+			if err != nil {
+				tflog.Warn(ctx, "Unable to read current AI Agent version during plan; using cached state",
+					map[string]interface{}{"error": err.Error()})
+			} else if output != nil && output.VersionNumber != nil {
+				var stateVersion frameworktypes.Int64
+				resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("version_number"), &stateVersion)...)
+				if !resp.Diagnostics.HasError() && !stateVersion.IsNull() &&
+					stateVersion.ValueInt64() != *output.VersionNumber {
+					tflog.Warn(ctx, "AI Agent version_number drift detected: version was created outside Terraform",
+						map[string]interface{}{
+							"state_version":  stateVersion.ValueInt64(),
+							"actual_version": *output.VersionNumber,
+						})
+				}
+				// Propagate the live value into the plan so the diff shows the real
+				// current version as the "before" value before we mark it Unknown.
+				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("version_number"), frameworktypes.Int64Value(*output.VersionNumber))...)
+			}
+		}
+	}
+
+	// A new version will be created during apply — the resulting number is unknown.
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("version_number"), frameworktypes.Int64Unknown())...)
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("qualified_id"), frameworktypes.StringUnknown())...)
 }
 
 func (r *ConnectAIAgentResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -164,7 +237,7 @@ func (r *ConnectAIAgentResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: "The type of the AI Agent. Valid values: `MANUAL_SEARCH`, `ANSWER_RECOMMENDATION`, `SELF_SERVICE`",
+				MarkdownDescription: "The type of the AI Agent. Valid values: `MANUAL_SEARCH`, `ANSWER_RECOMMENDATION`, `SELF_SERVICE`, `ORCHESTRATION`",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -297,6 +370,29 @@ func (r *ConnectAIAgentResource) Schema(ctx context.Context, req resource.Schema
 					},
 				},
 			},
+			"orchestration_configuration": schema.ListNestedBlock{
+				MarkdownDescription: "Configuration for orchestration AI agent type (ORCHESTRATION). Tool configurations are managed separately via the `connectracer_connect_ai_tool` resource.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"orchestration_ai_prompt_id": schema.StringAttribute{
+							MarkdownDescription: "The AI Prompt ID for orchestration",
+							Required:            true,
+						},
+						"orchestration_ai_guardrail_id": schema.StringAttribute{
+							MarkdownDescription: "The AI Guardrail ID for orchestration",
+							Optional:            true,
+						},
+						"connect_instance_arn": schema.StringAttribute{
+							MarkdownDescription: "The Amazon Connect instance ARN",
+							Optional:            true,
+						},
+						"locale": schema.StringAttribute{
+							MarkdownDescription: "The locale for the configuration",
+							Optional:            true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -335,8 +431,8 @@ func (r *ConnectAIAgentResource) Create(ctx context.Context, req resource.Create
 		VisibilityStatus: types.VisibilityStatus(data.VisibilityStatus.ValueString()),
 	}
 
-	// Build configuration from nested blocks
-	config := r.buildAIAgentConfiguration(&data)
+	// Build configuration from nested blocks (no preserved tools on create)
+	config := r.buildAIAgentConfiguration(&data, nil)
 	if config != nil {
 		input.Configuration = config
 	}
@@ -388,7 +484,16 @@ func (r *ConnectAIAgentResource) Create(ctx context.Context, req resource.Create
 		"ai_agent_id": data.ID.ValueString(),
 	})
 
-	// Optionally create a version
+	// Read back to populate all computed fields, including the live version_number
+	// from AWS (needed to detect drift from externally-created versions).
+	diags := r.readAndPopulateModel(ctx, &data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Optionally create a version AFTER reading back, so the freshly-created
+	// version number is the authoritative final value in state.
 	if !data.CreateVersion.IsNull() && data.CreateVersion.ValueBool() {
 		versionNumber, err := r.createVersion(ctx, data.AssistantID.ValueString(), data.ID.ValueString())
 		if err != nil {
@@ -399,15 +504,6 @@ func (r *ConnectAIAgentResource) Create(ctx context.Context, req resource.Create
 		} else {
 			data.VersionNumber = frameworktypes.Int64Value(versionNumber)
 		}
-	} else {
-		data.VersionNumber = frameworktypes.Int64Null()
-	}
-
-	// Read back to populate all computed fields
-	diags := r.readAndPopulateModel(ctx, &data)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
 	}
 
 	// Compute qualified_id (id:version_number)
@@ -468,8 +564,25 @@ func (r *ConnectAIAgentResource) Update(ctx context.Context, req resource.Update
 		updateInput.Description = aws.String(data.Description.ValueString())
 	}
 
+	// For orchestration agents, read the current tool configurations so that tools
+	// managed by connectracer_connect_ai_tool resources are not wiped on every update.
+	var preservedTools []types.ToolConfiguration
+	if len(data.OrchestrationConfiguration) > 0 {
+		if current, err := r.client.GetAIAgent(ctx, &qconnect.GetAIAgentInput{
+			AiAgentId:   aws.String(data.ID.ValueString()),
+			AssistantId: aws.String(data.AssistantID.ValueString()),
+		}); err == nil && current.AiAgent != nil {
+			if orch, ok := current.AiAgent.Configuration.(*types.AIAgentConfigurationMemberOrchestrationAIAgentConfiguration); ok {
+				preservedTools = sanitizePreservedTools(orch.Value.ToolConfigurations)
+			}
+		} else if err != nil {
+			tflog.Warn(ctx, "Unable to read current tool configurations during agent update; existing tools may be cleared",
+				map[string]any{"error": err.Error()})
+		}
+	}
+
 	// Build configuration from nested blocks
-	config := r.buildAIAgentConfiguration(&data)
+	config := r.buildAIAgentConfiguration(&data, preservedTools)
 	if config != nil {
 		updateInput.Configuration = config
 	}
@@ -483,7 +596,37 @@ func (r *ConnectAIAgentResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	// Optionally create a new version
+	// Sync tags — UpdateAIAgent wipes any existing tags, so we must re-apply
+	// all desired tags unconditionally after every update.
+	agentArn := state.AIAgentArn.ValueString()
+	if agentArn == "" {
+		agentArn = data.AIAgentArn.ValueString()
+	}
+	if err := r.syncTags(ctx, frameworktypes.MapNull(frameworktypes.StringType), data.Tags, agentArn); err != nil {
+		// Log but do not fail — TagResource may be restricted by IAM policy.
+		// The tag state will be corrected on the next refresh + apply cycle.
+		tflog.Warn(ctx, "Unable to sync tags after UpdateAIAgent; tags may be stale",
+			map[string]any{"error": err.Error()})
+	}
+
+	// Save the planned tag value before reading back. UpdateAIAgent wipes tags
+	// and TagResource may be unavailable; we preserve the intent so the provider
+	// does not produce an inconsistency error on this apply.
+	plannedTags := data.Tags
+
+	// Read back to refresh state, including the live version_number from AWS.
+	diags := r.readAndPopulateModel(ctx, &data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Restore planned tags: UpdateAIAgent wipes them and GetAIAgent therefore
+	// returns null; preserve the intent to avoid a provider inconsistency error.
+	data.Tags = plannedTags
+
+	// Optionally create a new version AFTER reading back, so the freshly-created
+	// version number is the authoritative final value in state.
 	if !data.CreateVersion.IsNull() && data.CreateVersion.ValueBool() {
 		versionNumber, err := r.createVersion(ctx, data.AssistantID.ValueString(), data.ID.ValueString())
 		if err != nil {
@@ -494,15 +637,6 @@ func (r *ConnectAIAgentResource) Update(ctx context.Context, req resource.Update
 		} else {
 			data.VersionNumber = frameworktypes.Int64Value(versionNumber)
 		}
-	} else {
-		data.VersionNumber = frameworktypes.Int64Null()
-	}
-
-	// Read back to refresh state
-	diags := r.readAndPopulateModel(ctx, &data)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
 	}
 
 	// Compute qualified_id (id:version_number)
@@ -633,12 +767,14 @@ func (r *ConnectAIAgentResource) readAndPopulateModel(ctx context.Context, data 
 		data.Tags = frameworktypes.MapNull(frameworktypes.StringType)
 	}
 
-	// Version number from response
+	// Always reflect the live version_number from AWS so that drift (e.g. a version
+	// created externally via the console) is detected during refresh/plan.
+	// If no version exists yet the API returns nil and we store null.
 	if output.VersionNumber != nil {
 		data.VersionNumber = frameworktypes.Int64Value(*output.VersionNumber)
+	} else {
+		data.VersionNumber = frameworktypes.Int64Null()
 	}
-	// Note: don't override VersionNumber if output.VersionNumber is nil,
-	// because it may have been set by createVersion
 
 	// Configuration - populate the correct nested block based on the configuration type
 	r.populateConfigurationFromAPI(agent.Configuration, data)
@@ -653,6 +789,7 @@ func (r *ConnectAIAgentResource) populateConfigurationFromAPI(config types.AIAge
 	data.AnswerRecommendationConfiguration = nil
 	data.ManualSearchConfiguration = nil
 	data.SelfServiceConfiguration = nil
+	data.OrchestrationConfiguration = nil
 
 	if config == nil {
 		return
@@ -687,6 +824,15 @@ func (r *ConnectAIAgentResource) populateConfigurationFromAPI(config types.AIAge
 			AssociationConfigurations:             r.flattenAssociationConfigurations(c.Value.AssociationConfigurations),
 		}
 		data.SelfServiceConfiguration = []SelfServiceConfigModel{model}
+
+	case *types.AIAgentConfigurationMemberOrchestrationAIAgentConfiguration:
+		model := OrchestrationConfigModel{
+			OrchestrationAIPromptId:    frameworktypes.StringPointerValue(c.Value.OrchestrationAIPromptId),
+			OrchestrationAIGuardrailId: frameworktypes.StringPointerValue(c.Value.OrchestrationAIGuardrailId),
+			ConnectInstanceArn:         frameworktypes.StringPointerValue(c.Value.ConnectInstanceArn),
+			Locale:                     frameworktypes.StringPointerValue(c.Value.Locale),
+		}
+		data.OrchestrationConfiguration = []OrchestrationConfigModel{model}
 	}
 }
 
@@ -758,7 +904,9 @@ func (r *ConnectAIAgentResource) createVersion(ctx context.Context, assistantID,
 }
 
 // buildAIAgentConfiguration builds the AIAgentConfiguration from the model's nested blocks.
-func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentResourceModel) types.AIAgentConfiguration {
+// preservedTools carries existing ToolConfigurations from a prior GetAIAgent call so that
+// tools managed by connectracer_connect_ai_tool resources survive an UpdateAIAgent call.
+func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentResourceModel, preservedTools []types.ToolConfiguration) types.AIAgentConfiguration {
 	if len(data.AnswerRecommendationConfiguration) > 0 {
 		cfg := data.AnswerRecommendationConfiguration[0]
 		value := types.AnswerRecommendationAIAgentConfiguration{
@@ -828,6 +976,28 @@ func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentR
 		}
 	}
 
+	if len(data.OrchestrationConfiguration) > 0 {
+		cfg := data.OrchestrationConfiguration[0]
+		value := types.OrchestrationAIAgentConfiguration{
+			OrchestrationAIPromptId: aws.String(cfg.OrchestrationAIPromptId.ValueString()),
+			ToolConfigurations:      preservedTools,
+		}
+
+		if !cfg.OrchestrationAIGuardrailId.IsNull() && !cfg.OrchestrationAIGuardrailId.IsUnknown() {
+			value.OrchestrationAIGuardrailId = aws.String(cfg.OrchestrationAIGuardrailId.ValueString())
+		}
+		if !cfg.ConnectInstanceArn.IsNull() && !cfg.ConnectInstanceArn.IsUnknown() {
+			value.ConnectInstanceArn = aws.String(cfg.ConnectInstanceArn.ValueString())
+		}
+		if !cfg.Locale.IsNull() && !cfg.Locale.IsUnknown() {
+			value.Locale = aws.String(cfg.Locale.ValueString())
+		}
+
+		return &types.AIAgentConfigurationMemberOrchestrationAIAgentConfiguration{
+			Value: value,
+		}
+	}
+
 	return nil
 }
 
@@ -866,6 +1036,88 @@ func (r *ConnectAIAgentResource) expandAssociationConfigurations(models []Associ
 	}
 
 	return result
+}
+
+// syncTags reconciles the desired tags (plan) against the prior tags (state)
+// by calling TagResource for additions and UntagResource for removals.
+// The ARN is taken from the resource's computed ai_agent_arn attribute.
+func (r *ConnectAIAgentResource) syncTags(
+	ctx context.Context,
+	oldTags, newTags frameworktypes.Map,
+	arn string,
+) error {
+	if arn == "" {
+		return nil
+	}
+
+	old := make(map[string]string)
+	if !oldTags.IsNull() && !oldTags.IsUnknown() {
+		oldTags.ElementsAs(ctx, &old, false)
+	}
+	new := make(map[string]string)
+	if !newTags.IsNull() && !newTags.IsUnknown() {
+		newTags.ElementsAs(ctx, &new, false)
+	}
+
+	// Tags to add or update
+	add := make(map[string]string)
+	for k, v := range new {
+		if oldVal, exists := old[k]; !exists || oldVal != v {
+			add[k] = v
+		}
+	}
+	if len(add) > 0 {
+		_, err := r.client.TagResource(ctx, &qconnect.TagResourceInput{
+			ResourceArn: aws.String(arn),
+			Tags:        add,
+		})
+		if err != nil {
+			return fmt.Errorf("TagResource failed: %w", err)
+		}
+	}
+
+	// Tags to remove
+	var remove []string
+	for k := range old {
+		if _, exists := new[k]; !exists {
+			remove = append(remove, k)
+		}
+	}
+	if len(remove) > 0 {
+		_, err := r.client.UntagResource(ctx, &qconnect.UntagResourceInput{
+			ResourceArn: aws.String(arn),
+			TagKeys:     remove,
+		})
+		if err != nil {
+			return fmt.Errorf("UntagResource failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// sanitizePreservedTools strips fields that the QConnect API does not accept
+// when passed back in an UpdateAIAgent call. MODEL_CONTEXT_PROTOCOL tools are
+// fully server-managed: only ToolName and ToolType may be present; any other
+// field (InputSchema, OutputSchema, Description, …) causes a ValidationException.
+func sanitizePreservedTools(tools []types.ToolConfiguration) []types.ToolConfiguration {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]types.ToolConfiguration, len(tools))
+	for i, t := range tools {
+		if t.ToolType == types.ToolTypeModelContextProtocol {
+			// Keep only the identity fields; the MCP gateway owns everything else.
+			out[i] = types.ToolConfiguration{
+				ToolName: t.ToolName,
+				ToolType: t.ToolType,
+				ToolId:   t.ToolId,
+			}
+		} else {
+			out[i] = t
+		}
+	}
+	return out
 }
 
 // computeQualifiedID computes the qualified ID (id:version_number) for referencing

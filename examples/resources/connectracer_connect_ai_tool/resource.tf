@@ -1,0 +1,164 @@
+# ---------------------------------------------------------------------------
+# Minimal RETURN_TO_CONTROL escalation tool
+# ---------------------------------------------------------------------------
+# This is the tool described in the Amazon Connect AI Agent workshop.
+# When the AI agent decides it cannot resolve the customer's issue it calls
+# this tool.  The contact flow receives control back and can read the returned
+# attributes (escalationReason, sentiment, etc.) to route the call to the
+# correct queue.
+
+resource "connectracer_connect_ai_tool" "escalate" {
+  assistant_id = "12345678-1234-1234-1234-123456789012"
+  ai_agent_id  = "60dfa473-aaaa-bbbb-cccc-dddddddddddd"
+
+  tool_name   = "Escalate"
+  tool_type   = "RETURN_TO_CONTROL"
+  title       = "Escalate to Human Agent"
+  description = "Transfer the contact to a human agent when the AI cannot resolve the issue or the customer requests a human."
+
+  instruction = "Call this tool whenever the customer expresses frustration, requests a human agent, or when the issue cannot be resolved through self-service. Populate all fields accurately so the contact flow can route to the correct queue."
+
+  input_schema_json = jsonencode({
+    type = "object"
+    properties = {
+      escalationReason = {
+        type        = "string"
+        description = "A brief description of why the contact is being escalated (e.g. 'billing dispute', 'technical issue', 'customer request')."
+      }
+      escalationSummary = {
+        type        = "string"
+        description = "A concise summary of the conversation so far, to be handed off to the human agent."
+      }
+      intent = {
+        type        = "string"
+        description = "The primary intent detected during the conversation (e.g. 'order_status', 'cancellation', 'billing_inquiry')."
+      }
+      sentiment = {
+        type        = "string"
+        enum        = ["POSITIVE", "NEUTRAL", "NEGATIVE", "MIXED"]
+        description = "The overall customer sentiment detected during the conversation."
+      }
+    }
+    required = ["escalationReason", "sentiment"]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Full example: orchestration agent + escalation tool together
+# ---------------------------------------------------------------------------
+# Create the orchestration agent first, then attach the tool.
+# The agent resource does not manage tool_configurations — that is done
+# exclusively by connectracer_connect_ai_tool resources.
+
+resource "connectracer_connect_ai_agent" "orchestration" {
+  assistant_id      = "12345678-1234-1234-1234-123456789012"
+  name              = "orchestration-agent"
+  type              = "ORCHESTRATION"
+  visibility_status = "PUBLISHED"
+  description       = "Orchestration AI Agent with escalation support"
+  create_version    = true
+
+  orchestration_configuration {
+    orchestration_ai_prompt_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    connect_instance_arn       = "arn:aws:connect:eu-central-1:123456789012:instance/ffffffff-1111-2222-3333-444444444444"
+    locale                     = "en_US"
+  }
+
+  tags = {
+    Environment = "production"
+    Workshop    = "agent-escalation"
+  }
+}
+
+resource "connectracer_connect_ai_tool" "escalate_full" {
+  assistant_id = connectracer_connect_ai_agent.orchestration.assistant_id
+  ai_agent_id  = connectracer_connect_ai_agent.orchestration.id
+
+  tool_name   = "Escalate"
+  tool_type   = "RETURN_TO_CONTROL"
+  title       = "Escalate to Human Agent"
+  description = "Transfer to a human agent when the AI cannot resolve the issue."
+
+  instruction = "Use this tool when: (1) the customer explicitly asks to speak to a person, (2) the issue cannot be resolved through self-service, or (3) sentiment is NEGATIVE for more than two turns."
+
+  instruction_examples = [
+    "Customer: 'I want to speak to a real person.' → call Escalate with escalationReason='customer_request', sentiment='NEUTRAL'.",
+    "Customer is repeatedly unable to verify their account → call Escalate with escalationReason='verification_failure', sentiment='NEGATIVE'.",
+  ]
+
+  input_schema_json = jsonencode({
+    type = "object"
+    properties = {
+      escalationReason = {
+        type        = "string"
+        description = "Why the contact is being escalated."
+      }
+      escalationSummary = {
+        type        = "string"
+        description = "Conversation summary for the receiving agent."
+      }
+      intent = {
+        type        = "string"
+        description = "Primary customer intent."
+      }
+      sentiment = {
+        type        = "string"
+        enum        = ["POSITIVE", "NEUTRAL", "NEGATIVE", "MIXED"]
+        description = "Overall customer sentiment."
+      }
+    }
+    required = ["escalationReason", "sentiment"]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Multiple tools on the same orchestration agent
+# ---------------------------------------------------------------------------
+# All connectracer_connect_ai_tool resources that share the same ai_agent_id
+# perform a safe read-modify-write, so they can coexist without conflicts
+# as long as they are applied sequentially (the default Terraform behaviour).
+
+resource "connectracer_connect_ai_tool" "check_order_status" {
+  assistant_id = "12345678-1234-1234-1234-123456789012"
+  ai_agent_id  = "60dfa473-aaaa-bbbb-cccc-dddddddddddd"
+
+  tool_name   = "CheckOrderStatus"
+  tool_type   = "MODEL_CONTEXT_PROTOCOL"
+  description = "Look up the current status of a customer order."
+
+  input_schema_json = jsonencode({
+    type = "object"
+    properties = {
+      orderId = {
+        type        = "string"
+        description = "The order identifier provided by the customer."
+      }
+    }
+    required = ["orderId"]
+  })
+}
+
+resource "connectracer_connect_ai_tool" "cancel_order" {
+  assistant_id = "12345678-1234-1234-1234-123456789012"
+  ai_agent_id  = "60dfa473-aaaa-bbbb-cccc-dddddddddddd"
+
+  tool_name                  = "CancelOrder"
+  tool_type                  = "MODEL_CONTEXT_PROTOCOL"
+  description                = "Cancel an existing order on behalf of the customer."
+  user_confirmation_required = true
+
+  input_schema_json = jsonencode({
+    type = "object"
+    properties = {
+      orderId = {
+        type        = "string"
+        description = "The order identifier to cancel."
+      }
+      reason = {
+        type        = "string"
+        description = "Reason for cancellation."
+      }
+    }
+    required = ["orderId"]
+  })
+}
