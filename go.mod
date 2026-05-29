@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.8
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
-	github.com/aws/aws-sdk-go-v2/service/appintegrations v1.37.9
+	github.com/aws/aws-sdk-go-v2/service/appintegrations v1.37.10
 	github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.37.0
 	github.com/aws/aws-sdk-go-v2/service/connect v1.172.1
 	github.com/aws/aws-sdk-go-v2/service/qconnect v1.32.1
@@ -55,8 +55,6 @@ require (
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/terraform-exec v0.25.1 // indirect
 	github.com/hashicorp/terraform-json v0.27.2 // indirect
-	github.com/hashicorp/terraform-plugin-framework-timeouts v0.7.0
-	github.com/hashicorp/terraform-plugin-framework-timetypes v0.5.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.40.0 // indirect
 	github.com/hashicorp/terraform-registry-address v0.4.0 // indirect
