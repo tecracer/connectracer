@@ -159,6 +159,8 @@ func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.
 		NewConnectAIToolResource,
 		NewQInConnectIntentResource,
 		NewConnectViewResource,
+		NewLexV2ModelsBotLocaleResource,
+		NewConnectContactFlowResource,
 	}
 }
 

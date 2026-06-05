@@ -124,9 +124,9 @@ func (d *WisdomKnowledgeBasesDataSource) Read(ctx context.Context, req datasourc
 
 	// Call AWS Wisdom API to list knowledge bases
 	input := &wisdom.ListKnowledgeBasesInput{}
-	
+
 	tflog.Debug(ctx, "Calling AWS Wisdom ListKnowledgeBases API")
-	
+
 	result, err := d.client.ListKnowledgeBases(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -138,10 +138,10 @@ func (d *WisdomKnowledgeBasesDataSource) Read(ctx context.Context, req datasourc
 
 	// Map response to our model
 	knowledgeBases := make([]KnowledgeBaseModel, 0, len(result.KnowledgeBaseSummaries))
-	
+
 	for _, kb := range result.KnowledgeBaseSummaries {
 		var tags types.Map
-		
+
 		if kb.Tags != nil && len(kb.Tags) > 0 {
 			tagMap := make(map[string]string)
 			for k, v := range kb.Tags {
