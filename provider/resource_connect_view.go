@@ -17,7 +17,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -131,10 +130,11 @@ func (r *ConnectViewResource) Schema(ctx context.Context, req resource.SchemaReq
 			"version": schema.Int64Attribute{
 				MarkdownDescription: "The current version number of the View",
 				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
+				// No UseStateForUnknown: Update always calls createVersion, which
+				// changes the version number. Keeping UseStateForUnknown here
+				// causes "provider produced inconsistent result after apply" because
+				// the plan would show the old version while the actual result differs.
 				},
-			},
 			"version_description": schema.StringAttribute{
 				MarkdownDescription: "An optional description for the version being published via CreateViewVersion",
 				Optional:            true,
@@ -558,9 +558,20 @@ func (r *ConnectViewResource) readAndPopulateModel(ctx context.Context, data *Co
 		data.Actions = frameworktypes.ListValueMust(frameworktypes.StringType, nil)
 	}
 
-	// Tags
-	if len(v.Tags) > 0 {
-		tagsMap, tagDiags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, v.Tags)
+	// Tags — strip AWS-internal tags (e.g. "resourceArn") that are
+	// automatically added by the Connect service and are not user-managed.
+	// Leaving them in state causes a "provider produced inconsistent result
+	// after apply" error when the user hasn't configured any tags, because the
+	// plan shows tags = null but the post-apply read returns the injected keys.
+	userTags := make(map[string]string)
+	for k, v := range v.Tags {
+		if k == "resourceArn" {
+			continue
+		}
+		userTags[k] = v
+	}
+	if len(userTags) > 0 {
+		tagsMap, tagDiags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, userTags)
 		diags.Append(tagDiags...)
 		if diags.HasError() {
 			return diags

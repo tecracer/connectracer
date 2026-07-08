@@ -6,9 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [unreleased] - current
+## [0.4.7] - 2026-07-11
 ### Fix
 - Flows will be update, not replaced
+- connectracer_connect_view.agent_screen_pop update errors
+  - `version` inconsistency**
+  - `tags` inconsistency**
 
 ## [0.2.5] - 2026-05-29
 ### Added
