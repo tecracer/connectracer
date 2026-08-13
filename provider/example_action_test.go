@@ -50,12 +50,12 @@ resource "terraform_data" "test" {
 	lifecycle {
 		action_trigger {
 		  events  = [before_create] # action triggers before resource creation
-		  actions = [action.scaffolding_example.test]
+		  actions = [action.connectracer_example.test]
 		}
 	}
 }
 
-action "scaffolding_example" "test" {
+action "connectracer_example" "test" {
 	config {
 		configurable_attribute = "example"
 	}

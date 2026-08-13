@@ -36,3 +36,4 @@ website/vendor
 main
 .task
 terraform-provider-connectracer
+/connectracer
