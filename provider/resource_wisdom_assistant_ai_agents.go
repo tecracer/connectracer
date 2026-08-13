@@ -67,6 +67,34 @@ func removeAssistantAIAgentInput(assistantID, agentType string, orchestratorUseC
 	return input
 }
 
+// awsAIAgentIDForAssignment returns the qualified AI agent ID AWS stores for an assignment.
+// ORCHESTRATION entries with orchestrator_use_cases are read from orchestratorConfigurationList,
+// not aiAgentConfiguration (UpdateAssistantAIAgent with orchestratorUseCase writes the list).
+func awsAIAgentIDForAssignment(assistant *qconnecttypes.AssistantData, agentType, orchestratorUseCase string) (string, bool) {
+	if assistant == nil {
+		return "", false
+	}
+
+	if agentType == string(qconnecttypes.AIAgentTypeOrchestration) && orchestratorUseCase != "" {
+		for _, entry := range assistant.OrchestratorConfigurationList {
+			if aws.ToString(entry.OrchestratorUseCase) != orchestratorUseCase {
+				continue
+			}
+			if entry.AiAgentId != nil && *entry.AiAgentId != "" {
+				return *entry.AiAgentId, true
+			}
+			return "", false
+		}
+		return "", false
+	}
+
+	agentData, ok := assistant.AiAgentConfiguration[agentType]
+	if !ok || agentData.AiAgentId == nil || *agentData.AiAgentId == "" {
+		return "", false
+	}
+	return *agentData.AiAgentId, true
+}
+
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &WisdomAssistantAIAgentsResource{}
 var _ resource.ResourceWithImportState = &WisdomAssistantAIAgentsResource{}
@@ -228,16 +256,22 @@ func (r *WisdomAssistantAIAgentsResource) Read(ctx context.Context, req resource
 		}
 	}
 
+	orchestratorUseCases, diags := orchestratorUseCasesFromModel(ctx, &data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	syncedTypes := make(map[string]string)
 	if result.Assistant != nil {
 		for agentType, configuredValue := range configuredTypes {
-			agentData, managed := result.Assistant.AiAgentConfiguration[agentType]
-			if !managed || agentData.AiAgentId == nil || *agentData.AiAgentId == "" {
+			useCase := orchestratorUseCases[agentType]
+			awsValue, managed := awsAIAgentIDForAssignment(result.Assistant, agentType, useCase)
+			if !managed {
 				// Assignment removed in AWS — omit from synced state so plan detects drift.
 				continue
 			}
 
-			awsValue := *agentData.AiAgentId
 			equal, err := qualifiedAIAgentIDsSemanticallyEqual(ctx, r.client, data.AssistantID.ValueString(), configuredValue, awsValue)
 			if err != nil {
 				tflog.Warn(ctx, "Unable to compare AI agent assignment semantically; using AWS value",

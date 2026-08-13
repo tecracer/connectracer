@@ -92,3 +92,29 @@ func TestRemoveAssistantAIAgentInputOrchestratorUseCase(t *testing.T) {
 		t.Fatalf("OrchestratorUseCase = %q, want Connect.SelfService", aws.ToString(input.OrchestratorUseCase))
 	}
 }
+
+func TestAwsAIAgentIDForAssignment(t *testing.T) {
+	t.Parallel()
+
+	assistant := &qconnecttypes.AssistantData{
+		AiAgentConfiguration: map[string]qconnecttypes.AIAgentConfigurationData{
+			"ORCHESTRATION": {AiAgentId: aws.String("539eb230-05ec-4ad1-9516-842423ba8be2:1")},
+		},
+		OrchestratorConfigurationList: []qconnecttypes.OrchestratorConfigurationEntry{
+			{
+				OrchestratorUseCase: aws.String("Connect.SelfService"),
+				AiAgentId:           aws.String("97a0c52f-821f-4edf-8ec5-a45e858a5fd8:1"),
+			},
+		},
+	}
+
+	id, ok := awsAIAgentIDForAssignment(assistant, "ORCHESTRATION", "Connect.SelfService")
+	if !ok || id != "97a0c52f-821f-4edf-8ec5-a45e858a5fd8:1" {
+		t.Fatalf("use-case assignment = (%q, %v), want (97a0c52f-821f-4edf-8ec5-a45e858a5fd8:1, true)", id, ok)
+	}
+
+	id, ok = awsAIAgentIDForAssignment(assistant, "ORCHESTRATION", "")
+	if !ok || id != "539eb230-05ec-4ad1-9516-842423ba8be2:1" {
+		t.Fatalf("default ORCHESTRATION = (%q, %v), want (539eb230-05ec-4ad1-9516-842423ba8be2:1, true)", id, ok)
+	}
+}
