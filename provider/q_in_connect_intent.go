@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -53,6 +54,7 @@ type QInConnectIntentResourceModel struct {
 	SampleUtterances              []QInConnectSampleUtteranceModel  `tfsdk:"sample_utterance"`
 	QInConnectIntentConfiguration []QInConnectIntentConfigModel     `tfsdk:"q_in_connect_intent_configuration"`
 	FulfillmentCodeHook           []QInConnectFulfillmentCodeHook   `tfsdk:"fulfillment_code_hook"`
+	BuildLocaleOnApply            types.Bool                        `tfsdk:"build_locale_on_apply"`
 }
 
 type QInConnectSampleUtteranceModel struct {
@@ -137,6 +139,13 @@ func (r *QInConnectIntentResource) Schema(_ context.Context, _ resource.SchemaRe
 			"last_updated_date_time": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "RFC3339 timestamp when the intent was last updated.",
+			},
+			"build_locale_on_apply": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "When `true`, runs `BuildBotLocale` for this intent's locale after create and update and waits until the locale reaches `Built`.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -278,6 +287,13 @@ func (r *QInConnectIntentResource) Create(ctx context.Context, req resource.Crea
 	data.CreationDateTime = flattenTime(described.CreationDateTime)
 	data.LastUpdatedDateTime = flattenTime(described.LastUpdatedDateTime)
 
+	if !data.BuildLocaleOnApply.IsNull() && data.BuildLocaleOnApply.ValueBool() {
+		if err := buildBotLocaleAndWait(ctx, r.client, data.BotID.ValueString(), data.BotVersion.ValueString(), data.LocaleID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error building Lex V2 bot locale", err.Error())
+			return
+		}
+	}
+
 	tflog.Trace(ctx, "Created Q in Connect Intent", map[string]any{"intent_id": aws.ToString(out.IntentId)})
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -356,6 +372,13 @@ func (r *QInConnectIntentResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 	data.LastUpdatedDateTime = flattenTime(out.LastUpdatedDateTime)
+
+	if !data.BuildLocaleOnApply.IsNull() && data.BuildLocaleOnApply.ValueBool() {
+		if err := buildBotLocaleAndWait(ctx, r.client, data.BotID.ValueString(), data.BotVersion.ValueString(), data.LocaleID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error building Lex V2 bot locale", err.Error())
+			return
+		}
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

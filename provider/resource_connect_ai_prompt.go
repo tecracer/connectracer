@@ -320,8 +320,6 @@ func (r *ConnectAIPromptResource) Create(ctx context.Context, req resource.Creat
 		} else {
 			data.VersionNumber = frameworktypes.Int64Value(versionNumber)
 		}
-	} else {
-		data.VersionNumber = frameworktypes.Int64Null()
 	}
 
 	// Read back to populate all computed fields
@@ -351,10 +349,16 @@ func (r *ConnectAIPromptResource) Read(ctx context.Context, req resource.ReadReq
 		"ai_prompt_id": data.ID.ValueString(),
 	})
 
+	prevVersion := data.VersionNumber
+
 	diags := r.readAndPopulateModel(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if data.VersionNumber.IsNull() && !prevVersion.IsNull() {
+		data.VersionNumber = prevVersion
 	}
 
 	// Compute qualified_id (id:version_number)
@@ -427,8 +431,6 @@ func (r *ConnectAIPromptResource) Update(ctx context.Context, req resource.Updat
 		} else {
 			data.VersionNumber = frameworktypes.Int64Value(versionNumber)
 		}
-	} else {
-		data.VersionNumber = frameworktypes.Int64Null()
 	}
 
 	// Read back to refresh state
@@ -436,6 +438,10 @@ func (r *ConnectAIPromptResource) Update(ctx context.Context, req resource.Updat
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if data.VersionNumber.IsNull() && !state.VersionNumber.IsNull() {
+		data.VersionNumber = state.VersionNumber
 	}
 
 	// Compute qualified_id (id:version_number)

@@ -15,9 +15,57 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	frameworktypes "github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
+
+func orchestratorUseCasesFromModel(ctx context.Context, data *WisdomAssistantAIAgentsResourceModel) (map[string]string, diag.Diagnostics) {
+	useCases := make(map[string]string)
+	if data.OrchestratorUseCases.IsNull() || data.OrchestratorUseCases.IsUnknown() {
+		return useCases, nil
+	}
+	diags := data.OrchestratorUseCases.ElementsAs(ctx, &useCases, false)
+	return useCases, diags
+}
+
+func validateOrchestratorUseCases(agentConfig, orchestratorUseCases map[string]string) error {
+	for agentType := range agentConfig {
+		if agentType != string(qconnecttypes.AIAgentTypeOrchestration) {
+			continue
+		}
+		useCase, ok := orchestratorUseCases[agentType]
+		if !ok || useCase == "" {
+			return fmt.Errorf("orchestrator_use_cases[%q] is required when assigning an ORCHESTRATION AI agent", agentType)
+		}
+	}
+	return nil
+}
+
+func updateAssistantAIAgentInput(assistantID, agentType, agentID string, orchestratorUseCases map[string]string) *qconnect.UpdateAssistantAIAgentInput {
+	input := &qconnect.UpdateAssistantAIAgentInput{
+		AssistantId: aws.String(assistantID),
+		AiAgentType: qconnecttypes.AIAgentType(agentType),
+		Configuration: &qconnecttypes.AIAgentConfigurationData{
+			AiAgentId: aws.String(agentID),
+		},
+	}
+	if useCase, ok := orchestratorUseCases[agentType]; ok && useCase != "" {
+		input.OrchestratorUseCase = aws.String(useCase)
+	}
+	return input
+}
+
+func removeAssistantAIAgentInput(assistantID, agentType string, orchestratorUseCases map[string]string) *qconnect.RemoveAssistantAIAgentInput {
+	input := &qconnect.RemoveAssistantAIAgentInput{
+		AssistantId: aws.String(assistantID),
+		AiAgentType: qconnecttypes.AIAgentType(agentType),
+	}
+	if useCase, ok := orchestratorUseCases[agentType]; ok && useCase != "" {
+		input.OrchestratorUseCase = aws.String(useCase)
+	}
+	return input
+}
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &WisdomAssistantAIAgentsResource{}
@@ -36,6 +84,7 @@ type WisdomAssistantAIAgentsResource struct {
 type WisdomAssistantAIAgentsResourceModel struct {
 	AssistantID          frameworktypes.String `tfsdk:"assistant_id"`
 	AIAgentConfiguration frameworktypes.Map    `tfsdk:"ai_agent_configuration"`
+	OrchestratorUseCases frameworktypes.Map    `tfsdk:"orchestrator_use_cases"`
 }
 
 func (r *WisdomAssistantAIAgentsResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -57,8 +106,14 @@ func (r *WisdomAssistantAIAgentsResource) Schema(ctx context.Context, req resour
 			"ai_agent_configuration": schema.MapAttribute{
 				MarkdownDescription: "The AI Agent configuration for the assistant. A map of AI Agent type to the qualified AI Agent ID " +
 					"(with version qualifier, e.g., `agent_id:$LATEST` or `agent_id:version_number`). " +
-					"Valid keys: `ANSWER_RECOMMENDATION`, `MANUAL_SEARCH`, `SELF_SERVICE`",
+					"Valid keys include `ANSWER_RECOMMENDATION`, `MANUAL_SEARCH`, `SELF_SERVICE`, and `ORCHESTRATION`.",
 				Required:    true,
+				ElementType: frameworktypes.StringType,
+			},
+			"orchestrator_use_cases": schema.MapAttribute{
+				MarkdownDescription: "Optional map of AI Agent type to orchestrator use case. Required for `ORCHESTRATION` " +
+					"(e.g. `Connect.SelfService` for chat self-service).",
+				Optional:    true,
 				ElementType: frameworktypes.StringType,
 			},
 		},
@@ -98,19 +153,28 @@ func (r *WisdomAssistantAIAgentsResource) Create(ctx context.Context, req resour
 		return
 	}
 
+	orchestratorUseCases, diags := orchestratorUseCasesFromModel(ctx, &data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := validateOrchestratorUseCases(agentConfig, orchestratorUseCases); err != nil {
+		resp.Diagnostics.AddError("Invalid orchestrator use case configuration", err.Error())
+		return
+	}
+
 	tflog.Debug(ctx, "Creating Wisdom Assistant AI Agents configuration", map[string]interface{}{
 		"assistant_id": data.AssistantID.ValueString(),
 		"agent_count":  len(agentConfig),
 	})
 
 	for agentType, agentID := range agentConfig {
-		_, err := r.client.UpdateAssistantAIAgent(ctx, &qconnect.UpdateAssistantAIAgentInput{
-			AssistantId: aws.String(data.AssistantID.ValueString()),
-			AiAgentType: qconnecttypes.AIAgentType(agentType),
-			Configuration: &qconnecttypes.AIAgentConfigurationData{
-				AiAgentId: aws.String(agentID),
-			},
-		})
+		_, err := r.client.UpdateAssistantAIAgent(ctx, updateAssistantAIAgentInput(
+			data.AssistantID.ValueString(),
+			agentType,
+			agentID,
+			orchestratorUseCases,
+		))
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error configuring AI Agent",
@@ -144,7 +208,7 @@ func (r *WisdomAssistantAIAgentsResource) Read(ctx context.Context, req resource
 		"assistant_id": data.AssistantID.ValueString(),
 	})
 
-	result, err := r.client.GetAssistant(ctx, &qconnect.GetAssistantInput{
+	_, err := r.client.GetAssistant(ctx, &qconnect.GetAssistantInput{
 		AssistantId: aws.String(data.AssistantID.ValueString()),
 	})
 	if err != nil {
@@ -155,37 +219,9 @@ func (r *WisdomAssistantAIAgentsResource) Read(ctx context.Context, req resource
 		return
 	}
 
-	if result.Assistant != nil && len(result.Assistant.AiAgentConfiguration) > 0 {
-		// Only include agent types that the user has configured to avoid drift from system-managed agents
-		existingConfig := make(map[string]string)
-		if !data.AIAgentConfiguration.IsNull() && !data.AIAgentConfiguration.IsUnknown() {
-			data.AIAgentConfiguration.ElementsAs(ctx, &existingConfig, false)
-		}
-
-		configuredTypes := make(map[string]string)
-		for agentType, agentData := range result.Assistant.AiAgentConfiguration {
-			// Only track agent types that the user has configured
-			if _, userManages := existingConfig[agentType]; !userManages {
-				continue
-			}
-			if agentData.AiAgentId != nil {
-				configuredTypes[agentType] = *agentData.AiAgentId
-			}
-		}
-
-		if len(configuredTypes) > 0 {
-			agentConfigMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, configuredTypes)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-			data.AIAgentConfiguration = agentConfigMap
-		} else {
-			data.AIAgentConfiguration = frameworktypes.MapNull(frameworktypes.StringType)
-		}
-	} else {
-		data.AIAgentConfiguration = frameworktypes.MapNull(frameworktypes.StringType)
-	}
+	// Keep ai_agent_configuration from state. AWS may return a different version
+	// qualifier (e.g. :6 vs :$LATEST) for the same assignment, which would cause
+	// perpetual plan drift if we synced it back from GetAssistant.
 
 	tflog.Trace(ctx, "Read Wisdom Assistant AI Agents configuration", map[string]interface{}{
 		"assistant_id": data.AssistantID.ValueString(),
@@ -219,6 +255,19 @@ func (r *WisdomAssistantAIAgentsResource) Update(ctx context.Context, req resour
 		return
 	}
 
+	oldOrchestratorUseCases, diags := orchestratorUseCasesFromModel(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+
+	orchestratorUseCases, diags := orchestratorUseCasesFromModel(ctx, &data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := validateOrchestratorUseCases(newAgentConfig, orchestratorUseCases); err != nil {
+		resp.Diagnostics.AddError("Invalid orchestrator use case configuration", err.Error())
+		return
+	}
+
 	tflog.Debug(ctx, "Updating Wisdom Assistant AI Agents configuration", map[string]interface{}{
 		"assistant_id": data.AssistantID.ValueString(),
 		"old_count":    len(oldAgentConfig),
@@ -228,10 +277,11 @@ func (r *WisdomAssistantAIAgentsResource) Update(ctx context.Context, req resour
 	// Remove agent types that are no longer in the config
 	for agentType := range oldAgentConfig {
 		if _, exists := newAgentConfig[agentType]; !exists {
-			_, err := r.client.RemoveAssistantAIAgent(ctx, &qconnect.RemoveAssistantAIAgentInput{
-				AssistantId: aws.String(data.AssistantID.ValueString()),
-				AiAgentType: qconnecttypes.AIAgentType(agentType),
-			})
+			_, err := r.client.RemoveAssistantAIAgent(ctx, removeAssistantAIAgentInput(
+				data.AssistantID.ValueString(),
+				agentType,
+				orchestratorUseCases,
+			))
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Error removing AI Agent",
@@ -248,14 +298,15 @@ func (r *WisdomAssistantAIAgentsResource) Update(ctx context.Context, req resour
 
 	// Add or update agent types
 	for agentType, agentID := range newAgentConfig {
-		if oldID, exists := oldAgentConfig[agentType]; !exists || oldID != agentID {
-			_, err := r.client.UpdateAssistantAIAgent(ctx, &qconnect.UpdateAssistantAIAgentInput{
-				AssistantId: aws.String(data.AssistantID.ValueString()),
-				AiAgentType: qconnecttypes.AIAgentType(agentType),
-				Configuration: &qconnecttypes.AIAgentConfigurationData{
-					AiAgentId: aws.String(agentID),
-				},
-			})
+		oldUseCase := oldOrchestratorUseCases[agentType]
+		newUseCase := orchestratorUseCases[agentType]
+		if oldID, exists := oldAgentConfig[agentType]; !exists || oldID != agentID || oldUseCase != newUseCase {
+			_, err := r.client.UpdateAssistantAIAgent(ctx, updateAssistantAIAgentInput(
+				data.AssistantID.ValueString(),
+				agentType,
+				agentID,
+				orchestratorUseCases,
+			))
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Error configuring AI Agent",
@@ -295,16 +346,23 @@ func (r *WisdomAssistantAIAgentsResource) Delete(ctx context.Context, req resour
 		}
 	}
 
+	orchestratorUseCases, diags := orchestratorUseCasesFromModel(ctx, &data)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	tflog.Debug(ctx, "Deleting Wisdom Assistant AI Agents configuration", map[string]interface{}{
 		"assistant_id": data.AssistantID.ValueString(),
 		"agent_count":  len(agentConfig),
 	})
 
 	for agentType := range agentConfig {
-		_, err := r.client.RemoveAssistantAIAgent(ctx, &qconnect.RemoveAssistantAIAgentInput{
-			AssistantId: aws.String(data.AssistantID.ValueString()),
-			AiAgentType: qconnecttypes.AIAgentType(agentType),
-		})
+		_, err := r.client.RemoveAssistantAIAgent(ctx, removeAssistantAIAgentInput(
+			data.AssistantID.ValueString(),
+			agentType,
+			orchestratorUseCases,
+		))
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error removing AI Agent",
