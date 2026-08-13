@@ -34,13 +34,13 @@ type WisdomAssistantsDataSourceModel struct {
 
 // AssistantModel describes a single assistant.
 type AssistantModel struct {
-	AssistantArn              types.String                     `tfsdk:"assistant_arn"`
-	AssistantID               types.String                     `tfsdk:"assistant_id"`
-	IntegrationConfiguration  *IntegrationConfigurationModel   `tfsdk:"integration_configuration"`
-	Name                      types.String                     `tfsdk:"name"`
-	Status                    types.String                     `tfsdk:"status"`
-	Tags                      types.Map                        `tfsdk:"tags"`
-	Type                      types.String                     `tfsdk:"type"`
+	AssistantArn             types.String                   `tfsdk:"assistant_arn"`
+	AssistantID              types.String                   `tfsdk:"assistant_id"`
+	IntegrationConfiguration *IntegrationConfigurationModel `tfsdk:"integration_configuration"`
+	Name                     types.String                   `tfsdk:"name"`
+	Status                   types.String                   `tfsdk:"status"`
+	Tags                     types.Map                      `tfsdk:"tags"`
+	Type                     types.String                   `tfsdk:"type"`
 }
 
 // IntegrationConfigurationModel describes the integration configuration.
@@ -140,9 +140,9 @@ func (d *WisdomAssistantsDataSource) Read(ctx context.Context, req datasource.Re
 
 	// Call AWS Wisdom API to list assistants
 	input := &wisdom.ListAssistantsInput{}
-	
+
 	tflog.Debug(ctx, "Calling AWS Wisdom ListAssistants API")
-	
+
 	result, err := d.client.ListAssistants(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -154,17 +154,17 @@ func (d *WisdomAssistantsDataSource) Read(ctx context.Context, req datasource.Re
 
 	// Map response to our model
 	assistants := make([]AssistantModel, 0, len(result.AssistantSummaries))
-	
+
 	for _, assistant := range result.AssistantSummaries {
 		var tags types.Map
-		
+
 		if len(assistant.Tags) > 0 {
 			tagMap := make(map[string]string)
 			for k, v := range assistant.Tags {
 				tagMap[k] = v
 			}
-			var diags = resp.Diagnostics
-			tags, diags = types.MapValueFrom(ctx, types.StringType, tagMap)
+			mappedTags, diags := types.MapValueFrom(ctx, types.StringType, tagMap)
+			tags = mappedTags
 			resp.Diagnostics.Append(diags...)
 		} else {
 			tags = types.MapNull(types.StringType)

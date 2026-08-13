@@ -18,8 +18,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -41,20 +41,20 @@ type QInConnectIntentResource struct {
 
 // QInConnectIntentResourceModel describes the resource data model.
 type QInConnectIntentResourceModel struct {
-	ID                            types.String                      `tfsdk:"id"`
-	BotID                         types.String                      `tfsdk:"bot_id"`
-	BotVersion                    types.String                      `tfsdk:"bot_version"`
-	LocaleID                      types.String                      `tfsdk:"locale_id"`
-	IntentID                      types.String                      `tfsdk:"intent_id"`
-	Name                          types.String                      `tfsdk:"name"`
-	Description                   types.String                      `tfsdk:"description"`
-	ParentIntentSignature         types.String                      `tfsdk:"parent_intent_signature"`
-	CreationDateTime              types.String                      `tfsdk:"creation_date_time"`
-	LastUpdatedDateTime           types.String                      `tfsdk:"last_updated_date_time"`
-	SampleUtterances              []QInConnectSampleUtteranceModel  `tfsdk:"sample_utterance"`
-	QInConnectIntentConfiguration []QInConnectIntentConfigModel     `tfsdk:"q_in_connect_intent_configuration"`
-	FulfillmentCodeHook           []QInConnectFulfillmentCodeHook   `tfsdk:"fulfillment_code_hook"`
-	BuildLocaleOnApply            types.Bool                        `tfsdk:"build_locale_on_apply"`
+	ID                            types.String                     `tfsdk:"id"`
+	BotID                         types.String                     `tfsdk:"bot_id"`
+	BotVersion                    types.String                     `tfsdk:"bot_version"`
+	LocaleID                      types.String                     `tfsdk:"locale_id"`
+	IntentID                      types.String                     `tfsdk:"intent_id"`
+	Name                          types.String                     `tfsdk:"name"`
+	Description                   types.String                     `tfsdk:"description"`
+	ParentIntentSignature         types.String                     `tfsdk:"parent_intent_signature"`
+	CreationDateTime              types.String                     `tfsdk:"creation_date_time"`
+	LastUpdatedDateTime           types.String                     `tfsdk:"last_updated_date_time"`
+	SampleUtterances              []QInConnectSampleUtteranceModel `tfsdk:"sample_utterance"`
+	QInConnectIntentConfiguration []QInConnectIntentConfigModel    `tfsdk:"q_in_connect_intent_configuration"`
+	FulfillmentCodeHook           []QInConnectFulfillmentCodeHook  `tfsdk:"fulfillment_code_hook"`
+	BuildLocaleOnApply            types.Bool                       `tfsdk:"build_locale_on_apply"`
 }
 
 type QInConnectSampleUtteranceModel struct {
@@ -255,10 +255,10 @@ func (r *QInConnectIntentResource) Create(ctx context.Context, req resource.Crea
 	input.FulfillmentCodeHook = expandFulfillmentCodeHook(data.FulfillmentCodeHook)
 
 	tflog.Debug(ctx, "Creating Q in Connect Intent", map[string]any{
-		"bot_id":     data.BotID.ValueString(),
+		"bot_id":      data.BotID.ValueString(),
 		"bot_version": data.BotVersion.ValueString(),
-		"locale_id":  data.LocaleID.ValueString(),
-		"name":       data.Name.ValueString(),
+		"locale_id":   data.LocaleID.ValueString(),
+		"name":        data.Name.ValueString(),
 	})
 
 	out, err := r.client.CreateIntent(ctx, input)

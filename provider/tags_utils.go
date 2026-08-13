@@ -10,7 +10,7 @@ import (
 	frameworktypes "github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// ensureRequiredTags ensures the AmazonConnectEnabled tag is set
+// ensureRequiredTags ensures the AmazonConnectEnabled tag is set.
 func ensureRequiredTags(ctx context.Context, userTags frameworktypes.Map) (map[string]string, error) {
 	tags := make(map[string]string)
 

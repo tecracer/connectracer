@@ -1,0 +1,3 @@
+.PHONY: generate
+generate:
+	cd tools && go generate ./...

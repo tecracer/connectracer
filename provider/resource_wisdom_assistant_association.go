@@ -36,13 +36,13 @@ type WisdomAssistantAssociationResource struct {
 
 // WisdomAssistantAssociationResourceModel describes the resource data model.
 type WisdomAssistantAssociationResourceModel struct {
-	ID                       frameworktypes.String                    `tfsdk:"id"`
-	AssistantAssociationArn  frameworktypes.String                    `tfsdk:"assistant_association_arn"`
-	AssistantID              frameworktypes.String                    `tfsdk:"assistant_id"`
-	AssociationType          frameworktypes.String                    `tfsdk:"association_type"`
-	AssociationData          *AssociationDataModel                    `tfsdk:"association_data"`
-	Tags                     frameworktypes.Map                       `tfsdk:"tags"`
-	TagsAll                  frameworktypes.Map                       `tfsdk:"tags_all"`
+	ID                      frameworktypes.String `tfsdk:"id"`
+	AssistantAssociationArn frameworktypes.String `tfsdk:"assistant_association_arn"`
+	AssistantID             frameworktypes.String `tfsdk:"assistant_id"`
+	AssociationType         frameworktypes.String `tfsdk:"association_type"`
+	AssociationData         *AssociationDataModel `tfsdk:"association_data"`
+	Tags                    frameworktypes.Map    `tfsdk:"tags"`
+	TagsAll                 frameworktypes.Map    `tfsdk:"tags_all"`
 }
 
 // AssociationDataModel describes the association data nested block.
@@ -198,7 +198,7 @@ func (r *WisdomAssistantAssociationResource) Create(ctx context.Context, req res
 		}
 
 		// Note: data.Tags already contains user-provided tags from plan
-		
+
 		// Store all tags (including provider-added) in state.TagsAll
 		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 		resp.Diagnostics.Append(diags...)

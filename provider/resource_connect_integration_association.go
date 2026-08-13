@@ -35,15 +35,15 @@ type ConnectIntegrationAssociationResource struct {
 
 // ConnectIntegrationAssociationResourceModel describes the resource data model.
 type ConnectIntegrationAssociationResourceModel struct {
-	ID                         frameworktypes.String `tfsdk:"id"`
-	IntegrationAssociationArn  frameworktypes.String `tfsdk:"integration_association_arn"`
-	InstanceID                 frameworktypes.String `tfsdk:"instance_id"`
-	IntegrationType            frameworktypes.String `tfsdk:"integration_type"`
-	IntegrationArn             frameworktypes.String `tfsdk:"integration_arn"`
-	SourceApplicationURL       frameworktypes.String `tfsdk:"source_application_url"`
-	SourceApplicationName      frameworktypes.String `tfsdk:"source_application_name"`
-	SourceType                 frameworktypes.String `tfsdk:"source_type"`
-	Tags                       frameworktypes.Map    `tfsdk:"tags"`
+	ID                        frameworktypes.String `tfsdk:"id"`
+	IntegrationAssociationArn frameworktypes.String `tfsdk:"integration_association_arn"`
+	InstanceID                frameworktypes.String `tfsdk:"instance_id"`
+	IntegrationType           frameworktypes.String `tfsdk:"integration_type"`
+	IntegrationArn            frameworktypes.String `tfsdk:"integration_arn"`
+	SourceApplicationURL      frameworktypes.String `tfsdk:"source_application_url"`
+	SourceApplicationName     frameworktypes.String `tfsdk:"source_application_name"`
+	SourceType                frameworktypes.String `tfsdk:"source_type"`
+	Tags                      frameworktypes.Map    `tfsdk:"tags"`
 }
 
 func (r *ConnectIntegrationAssociationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -352,20 +352,20 @@ func (r *ConnectIntegrationAssociationResource) Read(ctx context.Context, req re
 				data.IntegrationAssociationArn = frameworktypes.StringPointerValue(association.IntegrationAssociationArn)
 				data.IntegrationType = frameworktypes.StringValue(string(association.IntegrationType))
 				data.IntegrationArn = frameworktypes.StringPointerValue(association.IntegrationArn)
-				
+
 				// Handle optional fields - use null if not present
 				if association.SourceApplicationUrl != nil && *association.SourceApplicationUrl != "" {
 					data.SourceApplicationURL = frameworktypes.StringPointerValue(association.SourceApplicationUrl)
 				} else {
 					data.SourceApplicationURL = frameworktypes.StringNull()
 				}
-				
+
 				if association.SourceApplicationName != nil && *association.SourceApplicationName != "" {
 					data.SourceApplicationName = frameworktypes.StringPointerValue(association.SourceApplicationName)
 				} else {
 					data.SourceApplicationName = frameworktypes.StringNull()
 				}
-				
+
 				// SourceType might be empty for WISDOM integrations
 				if association.SourceType != "" {
 					data.SourceType = frameworktypes.StringValue(string(association.SourceType))
@@ -523,8 +523,8 @@ func (r *ConnectIntegrationAssociationResource) Delete(ctx context.Context, req 
 
 	// Delete the integration association
 	input := &connect.DeleteIntegrationAssociationInput{
-		InstanceId:                aws.String(data.InstanceID.ValueString()),
-		IntegrationAssociationId:  aws.String(data.ID.ValueString()),
+		InstanceId:               aws.String(data.InstanceID.ValueString()),
+		IntegrationAssociationId: aws.String(data.ID.ValueString()),
 	}
 
 	_, err := r.client.DeleteIntegrationAssociation(ctx, input)

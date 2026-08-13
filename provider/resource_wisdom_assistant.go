@@ -34,13 +34,13 @@ type WisdomAssistantResource struct {
 
 // WisdomAssistantResourceModel describes the resource data model.
 type WisdomAssistantResourceModel struct {
-	ID                    frameworktypes.String `tfsdk:"id"`
-	AssistantArn          frameworktypes.String `tfsdk:"assistant_arn"`
-	Name                  frameworktypes.String `tfsdk:"name"`
-	Type                  frameworktypes.String `tfsdk:"type"`
-	Description           frameworktypes.String `tfsdk:"description"`
-	Tags                  frameworktypes.Map    `tfsdk:"tags"`
-	TagsAll               frameworktypes.Map    `tfsdk:"tags_all"`
+	ID           frameworktypes.String `tfsdk:"id"`
+	AssistantArn frameworktypes.String `tfsdk:"assistant_arn"`
+	Name         frameworktypes.String `tfsdk:"name"`
+	Type         frameworktypes.String `tfsdk:"type"`
+	Description  frameworktypes.String `tfsdk:"description"`
+	Tags         frameworktypes.Map    `tfsdk:"tags"`
+	TagsAll      frameworktypes.Map    `tfsdk:"tags_all"`
 }
 
 func (r *WisdomAssistantResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -155,7 +155,7 @@ func (r *WisdomAssistantResource) Create(ctx context.Context, req resource.Creat
 	data.AssistantArn = frameworktypes.StringValue(*result.Assistant.AssistantArn)
 
 	// Note: data.Tags already contains user-provided tags from plan
-	
+
 	// Store all tags (including provider-added) in state.TagsAll
 	tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 	resp.Diagnostics.Append(diags...)
@@ -244,7 +244,7 @@ func (r *WisdomAssistantResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	// Note: data.Tags already contains user-provided tags from plan
-	
+
 	// Store all tags (including provider-added) in state.TagsAll
 	tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 	resp.Diagnostics.Append(diags...)

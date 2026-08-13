@@ -39,28 +39,28 @@ type ConnectAIPromptResource struct {
 
 // ConnectAIPromptResourceModel describes the resource data model.
 type ConnectAIPromptResourceModel struct {
-	ID                     frameworktypes.String  `tfsdk:"id"`
-	AssistantID            frameworktypes.String  `tfsdk:"assistant_id"`
-	Name                   frameworktypes.String  `tfsdk:"name"`
-	Description            frameworktypes.String  `tfsdk:"description"`
-	Type                   frameworktypes.String  `tfsdk:"type"`
-	TemplateType           frameworktypes.String  `tfsdk:"template_type"`
-	ModelID                frameworktypes.String  `tfsdk:"model_id"`
-	APIFormat              frameworktypes.String  `tfsdk:"api_format"`
-	VisibilityStatus       frameworktypes.String  `tfsdk:"visibility_status"`
-	TemplateText           frameworktypes.String  `tfsdk:"template_text"`
-	AIPromptArn            frameworktypes.String  `tfsdk:"ai_prompt_arn"`
-	AssistantArn           frameworktypes.String  `tfsdk:"assistant_arn"`
-	Status                 frameworktypes.String  `tfsdk:"status"`
-	ModifiedTime           frameworktypes.String  `tfsdk:"modified_time"`
-	Tags                   frameworktypes.Map     `tfsdk:"tags"`
-	CreateVersion          frameworktypes.Bool    `tfsdk:"create_version"`
-	VersionNumber          frameworktypes.Int64   `tfsdk:"version_number"`
-	QualifiedID            frameworktypes.String  `tfsdk:"qualified_id"`
-	MaxTokensToSample      frameworktypes.Int32   `tfsdk:"max_tokens_to_sample"`
-	Temperature            frameworktypes.Float32 `tfsdk:"temperature"`
-	TopK                   frameworktypes.Int32   `tfsdk:"top_k"`
-	TopP                   frameworktypes.Float32 `tfsdk:"top_p"`
+	ID                frameworktypes.String  `tfsdk:"id"`
+	AssistantID       frameworktypes.String  `tfsdk:"assistant_id"`
+	Name              frameworktypes.String  `tfsdk:"name"`
+	Description       frameworktypes.String  `tfsdk:"description"`
+	Type              frameworktypes.String  `tfsdk:"type"`
+	TemplateType      frameworktypes.String  `tfsdk:"template_type"`
+	ModelID           frameworktypes.String  `tfsdk:"model_id"`
+	APIFormat         frameworktypes.String  `tfsdk:"api_format"`
+	VisibilityStatus  frameworktypes.String  `tfsdk:"visibility_status"`
+	TemplateText      frameworktypes.String  `tfsdk:"template_text"`
+	AIPromptArn       frameworktypes.String  `tfsdk:"ai_prompt_arn"`
+	AssistantArn      frameworktypes.String  `tfsdk:"assistant_arn"`
+	Status            frameworktypes.String  `tfsdk:"status"`
+	ModifiedTime      frameworktypes.String  `tfsdk:"modified_time"`
+	Tags              frameworktypes.Map     `tfsdk:"tags"`
+	CreateVersion     frameworktypes.Bool    `tfsdk:"create_version"`
+	VersionNumber     frameworktypes.Int64   `tfsdk:"version_number"`
+	QualifiedID       frameworktypes.String  `tfsdk:"qualified_id"`
+	MaxTokensToSample frameworktypes.Int32   `tfsdk:"max_tokens_to_sample"`
+	Temperature       frameworktypes.Float32 `tfsdk:"temperature"`
+	TopK              frameworktypes.Int32   `tfsdk:"top_k"`
+	TopP              frameworktypes.Float32 `tfsdk:"top_p"`
 }
 
 func (r *ConnectAIPromptResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -227,7 +227,7 @@ func (r *ConnectAIPromptResource) Configure(ctx context.Context, req resource.Co
 }
 
 func trimTrailingWhitespace(content string) string {
-  return strings.TrimRight(content, " \t\n\r")
+	return strings.TrimRight(content, " \t\n\r")
 }
 
 func (r *ConnectAIPromptResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

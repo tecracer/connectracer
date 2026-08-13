@@ -6,8 +6,8 @@ package provider
 import (
 	"testing"
 
-	qconnecttypes "github.com/aws/aws-sdk-go-v2/service/qconnect/types"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	qconnecttypes "github.com/aws/aws-sdk-go-v2/service/qconnect/types"
 )
 
 const testAgentID = "97a0c52f-821f-4edf-8ec5-a45e858a5fd8"

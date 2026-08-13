@@ -39,25 +39,25 @@ type ConnectAIAgentResource struct {
 
 // ConnectAIAgentResourceModel describes the resource data model.
 type ConnectAIAgentResourceModel struct {
-	ID                                frameworktypes.String                `tfsdk:"id"`
-	AssistantID                       frameworktypes.String                `tfsdk:"assistant_id"`
-	Name                              frameworktypes.String                `tfsdk:"name"`
-	Description                       frameworktypes.String                `tfsdk:"description"`
-	Type                              frameworktypes.String                `tfsdk:"type"`
-	VisibilityStatus                  frameworktypes.String                `tfsdk:"visibility_status"`
-	AIAgentArn                        frameworktypes.String                `tfsdk:"ai_agent_arn"`
-	AssistantArn                      frameworktypes.String                `tfsdk:"assistant_arn"`
-	Status                            frameworktypes.String                `tfsdk:"status"`
-	Origin                            frameworktypes.String                `tfsdk:"origin"`
-	ModifiedTime                      frameworktypes.String                `tfsdk:"modified_time"`
-	Tags                              frameworktypes.Map                   `tfsdk:"tags"`
-	CreateVersion                     frameworktypes.Bool                  `tfsdk:"create_version"`
-	VersionNumber                     frameworktypes.Int64                 `tfsdk:"version_number"`
-	QualifiedID                       frameworktypes.String                `tfsdk:"qualified_id"`
-	AnswerRecommendationConfiguration []AnswerRecommendationConfigModel    `tfsdk:"answer_recommendation_configuration"`
-	ManualSearchConfiguration         []ManualSearchConfigModel            `tfsdk:"manual_search_configuration"`
-	SelfServiceConfiguration          []SelfServiceConfigModel             `tfsdk:"self_service_configuration"`
-	OrchestrationConfiguration        []OrchestrationConfigModel           `tfsdk:"orchestration_configuration"`
+	ID                                frameworktypes.String             `tfsdk:"id"`
+	AssistantID                       frameworktypes.String             `tfsdk:"assistant_id"`
+	Name                              frameworktypes.String             `tfsdk:"name"`
+	Description                       frameworktypes.String             `tfsdk:"description"`
+	Type                              frameworktypes.String             `tfsdk:"type"`
+	VisibilityStatus                  frameworktypes.String             `tfsdk:"visibility_status"`
+	AIAgentArn                        frameworktypes.String             `tfsdk:"ai_agent_arn"`
+	AssistantArn                      frameworktypes.String             `tfsdk:"assistant_arn"`
+	Status                            frameworktypes.String             `tfsdk:"status"`
+	Origin                            frameworktypes.String             `tfsdk:"origin"`
+	ModifiedTime                      frameworktypes.String             `tfsdk:"modified_time"`
+	Tags                              frameworktypes.Map                `tfsdk:"tags"`
+	CreateVersion                     frameworktypes.Bool               `tfsdk:"create_version"`
+	VersionNumber                     frameworktypes.Int64              `tfsdk:"version_number"`
+	QualifiedID                       frameworktypes.String             `tfsdk:"qualified_id"`
+	AnswerRecommendationConfiguration []AnswerRecommendationConfigModel `tfsdk:"answer_recommendation_configuration"`
+	ManualSearchConfiguration         []ManualSearchConfigModel         `tfsdk:"manual_search_configuration"`
+	SelfServiceConfiguration          []SelfServiceConfigModel          `tfsdk:"self_service_configuration"`
+	OrchestrationConfiguration        []OrchestrationConfigModel        `tfsdk:"orchestration_configuration"`
 }
 
 type AnswerRecommendationConfigModel struct {
@@ -90,12 +90,10 @@ type OrchestrationConfigModel struct {
 	Locale                     frameworktypes.String `tfsdk:"locale"`
 }
 
-
-
 type AssociationConfigModel struct {
-	AssociationID              frameworktypes.String        `tfsdk:"association_id"`
-	AssociationType            frameworktypes.String        `tfsdk:"association_type"`
-	KnowledgeBaseConfiguration []KnowledgeBaseConfigModel   `tfsdk:"knowledge_base_configuration"`
+	AssociationID              frameworktypes.String      `tfsdk:"association_id"`
+	AssociationType            frameworktypes.String      `tfsdk:"association_type"`
+	KnowledgeBaseConfiguration []KnowledgeBaseConfigModel `tfsdk:"knowledge_base_configuration"`
 }
 
 type KnowledgeBaseConfigModel struct {
@@ -1075,14 +1073,14 @@ func (r *ConnectAIAgentResource) syncTags(
 	if !oldTags.IsNull() && !oldTags.IsUnknown() {
 		oldTags.ElementsAs(ctx, &old, false)
 	}
-	new := make(map[string]string)
+	newTagsMap := make(map[string]string)
 	if !newTags.IsNull() && !newTags.IsUnknown() {
-		newTags.ElementsAs(ctx, &new, false)
+		newTags.ElementsAs(ctx, &newTagsMap, false)
 	}
 
 	// Tags to add or update
 	add := make(map[string]string)
-	for k, v := range new {
+	for k, v := range newTagsMap {
 		if oldVal, exists := old[k]; !exists || oldVal != v {
 			add[k] = v
 		}
@@ -1100,7 +1098,7 @@ func (r *ConnectAIAgentResource) syncTags(
 	// Tags to remove
 	var remove []string
 	for k := range old {
-		if _, exists := new[k]; !exists {
+		if _, exists := newTagsMap[k]; !exists {
 			remove = append(remove, k)
 		}
 	}

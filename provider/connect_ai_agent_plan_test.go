@@ -13,9 +13,9 @@ func TestAiAgentPlanRequiresNewVersion(t *testing.T) {
 	t.Parallel()
 
 	base := ConnectAIAgentResourceModel{
-		Description:        frameworktypes.StringValue("desc"),
-		VisibilityStatus:   frameworktypes.StringValue("PUBLISHED"),
-		Tags:               frameworktypes.MapNull(frameworktypes.StringType),
+		Description:      frameworktypes.StringValue("desc"),
+		VisibilityStatus: frameworktypes.StringValue("PUBLISHED"),
+		Tags:             frameworktypes.MapNull(frameworktypes.StringType),
 		OrchestrationConfiguration: []OrchestrationConfigModel{
 			{
 				OrchestrationAIPromptId: frameworktypes.StringValue("prompt-1:$LATEST"),
