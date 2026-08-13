@@ -25,33 +25,19 @@ import (
 
 // hashicupsProvider is the provider implementation.
 type connectracerProvider struct {
-    // version is set to the provider version on release, "dev" when the
-    // provider is built and ran locally, and "test" when running acceptance
-    // testing.
-    version string
-}
-
-
-
-
-// Ensure the implementation satisfies the expected interfaces.
-var (
-    _ provider.Provider = &connectracerProvider{}
-)
-
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
-var _ provider.Provider = &connectracerProvider{}
-var _ provider.ProviderWithFunctions = &connectracerProvider{}
-var _ provider.ProviderWithEphemeralResources = &connectracerProvider{}
-var _ provider.ProviderWithActions = &connectracerProvider{}
-
-// ScaffoldingProvider defines the provider implementation.
-type ScaffoldingProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
 }
+
+// Ensure the implementation satisfies the expected interfaces.
+var (
+	_ provider.Provider                       = &connectracerProvider{}
+	_ provider.ProviderWithFunctions          = &connectracerProvider{}
+	_ provider.ProviderWithEphemeralResources = &connectracerProvider{}
+	_ provider.ProviderWithActions            = &connectracerProvider{}
+)
 
 // ConnectracerProviderModel describes the provider data model.
 type ConnectracerProviderModel struct {
@@ -69,8 +55,8 @@ type ProviderClients struct {
 }
 
 func (p *connectracerProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
-    resp.TypeName = "connectracer"
-    resp.Version = p.version
+	resp.TypeName = "connectracer"
+	resp.Version = p.version
 }
 
 func (p *connectracerProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
@@ -194,9 +180,9 @@ func (p *connectracerProvider) Actions(ctx context.Context) []func() action.Acti
 
 // New is a helper function to simplify provider server and testing implementation.
 func New(version string) func() provider.Provider {
-    return func() provider.Provider {
-        return &connectracerProvider{
-            version: version,
-        }
-    }
+	return func() provider.Provider {
+		return &connectracerProvider{
+			version: version,
+		}
+	}
 }

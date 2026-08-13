@@ -60,8 +60,8 @@ type RuleActionModel struct {
 	EventBridgeAction           *EventBridgeActionModel          `json:"event_bridge_action,omitempty"`
 	TaskAction                  *TaskActionModel                 `json:"task_action,omitempty"`
 	SendNotificationAction      *SendNotificationActionModel     `json:"send_notification_action,omitempty"`
-	AssignContactCategoryAction *struct{}                         `json:"assign_contact_category_action,omitempty"`
-	EndAssociatedTasksAction    *struct{}                         `json:"end_associated_tasks_action,omitempty"`
+	AssignContactCategoryAction *struct{}                        `json:"assign_contact_category_action,omitempty"`
+	EndAssociatedTasksAction    *struct{}                        `json:"end_associated_tasks_action,omitempty"`
 	SubmitAutoEvaluationAction  *SubmitAutoEvaluationActionModel `json:"submit_auto_evaluation_action,omitempty"`
 	CreateCaseAction            *CreateCaseActionModel           `json:"create_case_action,omitempty"`
 	UpdateCaseAction            *UpdateCaseActionModel           `json:"update_case_action,omitempty"`
@@ -113,7 +113,7 @@ type UpdateCaseActionModel struct {
 }
 
 type FieldValueModel struct {
-	Id    string               `json:"id"`
+	Id    string                `json:"id"`
 	Value *FieldValueUnionModel `json:"value,omitempty"`
 }
 

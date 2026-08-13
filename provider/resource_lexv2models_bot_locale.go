@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	frameworktypes "github.com/hashicorp/terraform-plugin-framework/types"
@@ -38,23 +39,24 @@ type LexV2ModelsBotLocaleResource struct {
 
 // LexV2ModelsBotLocaleResourceModel describes the resource data model.
 type LexV2ModelsBotLocaleResourceModel struct {
-	ID                           frameworktypes.String  `tfsdk:"id"`
-	BotID                        frameworktypes.String  `tfsdk:"bot_id"`
-	BotVersion                   frameworktypes.String  `tfsdk:"bot_version"`
-	LocaleID                     frameworktypes.String  `tfsdk:"locale_id"`
-	LocaleName                   frameworktypes.String  `tfsdk:"locale_name"`
-	NluIntentConfidenceThreshold frameworktypes.Float64 `tfsdk:"nlu_intent_confidence_threshold"`
-	Description                  frameworktypes.String  `tfsdk:"description"`
-	SpeechDetectionSensitivity   frameworktypes.String  `tfsdk:"speech_detection_sensitivity"`
-	BotLocaleStatus              frameworktypes.String  `tfsdk:"bot_locale_status"`
-	CreationDateTime             frameworktypes.String  `tfsdk:"creation_date_time"`
-	LastUpdatedDateTime          frameworktypes.String  `tfsdk:"last_updated_date_time"`
-	FailureReasons               frameworktypes.List    `tfsdk:"failure_reasons"`
+	ID                           frameworktypes.String                     `tfsdk:"id"`
+	BotID                        frameworktypes.String                     `tfsdk:"bot_id"`
+	BotVersion                   frameworktypes.String                     `tfsdk:"bot_version"`
+	LocaleID                     frameworktypes.String                     `tfsdk:"locale_id"`
+	LocaleName                   frameworktypes.String                     `tfsdk:"locale_name"`
+	NluIntentConfidenceThreshold frameworktypes.Float64                    `tfsdk:"nlu_intent_confidence_threshold"`
+	Description                  frameworktypes.String                     `tfsdk:"description"`
+	SpeechDetectionSensitivity   frameworktypes.String                     `tfsdk:"speech_detection_sensitivity"`
+	BotLocaleStatus              frameworktypes.String                     `tfsdk:"bot_locale_status"`
+	CreationDateTime             frameworktypes.String                     `tfsdk:"creation_date_time"`
+	LastUpdatedDateTime          frameworktypes.String                     `tfsdk:"last_updated_date_time"`
+	FailureReasons               frameworktypes.List                       `tfsdk:"failure_reasons"`
 	VoiceSettings                []BotLocaleVoiceSettingsModel             `tfsdk:"voice_settings"`
 	SpeechRecognitionSettings    []BotLocaleSpeechRecognitionSettingsModel `tfsdk:"speech_recognition_settings"`
 	UnifiedSpeechSettings        []BotLocaleUnifiedSpeechSettingsModel     `tfsdk:"unified_speech_settings"`
 	GenerativeAISettings         []BotLocaleGenerativeAISettingsModel      `tfsdk:"generative_ai_settings"`
 	AudioFillerSettings          []BotLocaleAudioFillerSettingsModel       `tfsdk:"audio_filler_settings"`
+	BuildOnApply                 frameworktypes.Bool                       `tfsdk:"build_on_apply"`
 }
 
 type BotLocaleAudioFillerSettingsModel struct {
@@ -292,6 +294,13 @@ func (r *LexV2ModelsBotLocaleResource) Schema(_ context.Context, _ resource.Sche
 				Computed:            true,
 				ElementType:         frameworktypes.StringType,
 			},
+			"build_on_apply": schema.BoolAttribute{
+				MarkdownDescription: "When `true`, runs `BuildBotLocale` after create and update and waits until the locale reaches `Built`.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 
 		Blocks: map[string]schema.Block{
@@ -441,7 +450,7 @@ func (r *LexV2ModelsBotLocaleResource) Schema(_ context.Context, _ resource.Sche
 								"`MELODY_CHIPPER_CHIME`, `MELODY_CURIOUS_CRAWL`, `MELODY_RISING_RIPPLE`, " +
 								"`MELODY_PATIENT_PING`, `MELODY_PONDERING_PONG`, " +
 								"`TYPING_KINETIC_KEYS`, `TYPING_QUIET_QWERTY`",
-							Required:            true,
+							Required: true,
 						},
 						"start_delay_in_milliseconds": schema.Int64Attribute{
 							MarkdownDescription: "Time (ms) to wait after end of user utterance before starting audio filler. Valid range: 500–5000. Default: 2500",
@@ -555,6 +564,18 @@ func (r *LexV2ModelsBotLocaleResource) Create(ctx context.Context, req resource.
 		return
 	}
 
+	if !data.BuildOnApply.IsNull() && data.BuildOnApply.ValueBool() {
+		if err := buildBotLocaleAndWait(ctx, r.client, data.BotID.ValueString(), data.BotVersion.ValueString(), data.LocaleID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error building Lex V2 bot locale", err.Error())
+			return
+		}
+		diags = r.readAndPopulateModel(ctx, &data)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -639,6 +660,18 @@ func (r *LexV2ModelsBotLocaleResource) Update(ctx context.Context, req resource.
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if !data.BuildOnApply.IsNull() && data.BuildOnApply.ValueBool() {
+		if err := buildBotLocaleAndWait(ctx, r.client, data.BotID.ValueString(), data.BotVersion.ValueString(), data.LocaleID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error building Lex V2 bot locale", err.Error())
+			return
+		}
+		diags = r.readAndPopulateModel(ctx, &data)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	tflog.Trace(ctx, "Updated Lex V2 bot locale")

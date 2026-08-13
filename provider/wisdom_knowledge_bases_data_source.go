@@ -142,13 +142,13 @@ func (d *WisdomKnowledgeBasesDataSource) Read(ctx context.Context, req datasourc
 	for _, kb := range result.KnowledgeBaseSummaries {
 		var tags types.Map
 
-		if kb.Tags != nil && len(kb.Tags) > 0 {
+		if len(kb.Tags) > 0 {
 			tagMap := make(map[string]string)
 			for k, v := range kb.Tags {
 				tagMap[k] = v
 			}
-			var diags = resp.Diagnostics
-			tags, diags = types.MapValueFrom(ctx, types.StringType, tagMap)
+			mappedTags, diags := types.MapValueFrom(ctx, types.StringType, tagMap)
+			tags = mappedTags
 			resp.Diagnostics.Append(diags...)
 		} else {
 			tags = types.MapNull(types.StringType)

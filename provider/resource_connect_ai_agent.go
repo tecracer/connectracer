@@ -39,25 +39,25 @@ type ConnectAIAgentResource struct {
 
 // ConnectAIAgentResourceModel describes the resource data model.
 type ConnectAIAgentResourceModel struct {
-	ID                                frameworktypes.String                `tfsdk:"id"`
-	AssistantID                       frameworktypes.String                `tfsdk:"assistant_id"`
-	Name                              frameworktypes.String                `tfsdk:"name"`
-	Description                       frameworktypes.String                `tfsdk:"description"`
-	Type                              frameworktypes.String                `tfsdk:"type"`
-	VisibilityStatus                  frameworktypes.String                `tfsdk:"visibility_status"`
-	AIAgentArn                        frameworktypes.String                `tfsdk:"ai_agent_arn"`
-	AssistantArn                      frameworktypes.String                `tfsdk:"assistant_arn"`
-	Status                            frameworktypes.String                `tfsdk:"status"`
-	Origin                            frameworktypes.String                `tfsdk:"origin"`
-	ModifiedTime                      frameworktypes.String                `tfsdk:"modified_time"`
-	Tags                              frameworktypes.Map                   `tfsdk:"tags"`
-	CreateVersion                     frameworktypes.Bool                  `tfsdk:"create_version"`
-	VersionNumber                     frameworktypes.Int64                 `tfsdk:"version_number"`
-	QualifiedID                       frameworktypes.String                `tfsdk:"qualified_id"`
-	AnswerRecommendationConfiguration []AnswerRecommendationConfigModel    `tfsdk:"answer_recommendation_configuration"`
-	ManualSearchConfiguration         []ManualSearchConfigModel            `tfsdk:"manual_search_configuration"`
-	SelfServiceConfiguration          []SelfServiceConfigModel             `tfsdk:"self_service_configuration"`
-	OrchestrationConfiguration        []OrchestrationConfigModel           `tfsdk:"orchestration_configuration"`
+	ID                                frameworktypes.String             `tfsdk:"id"`
+	AssistantID                       frameworktypes.String             `tfsdk:"assistant_id"`
+	Name                              frameworktypes.String             `tfsdk:"name"`
+	Description                       frameworktypes.String             `tfsdk:"description"`
+	Type                              frameworktypes.String             `tfsdk:"type"`
+	VisibilityStatus                  frameworktypes.String             `tfsdk:"visibility_status"`
+	AIAgentArn                        frameworktypes.String             `tfsdk:"ai_agent_arn"`
+	AssistantArn                      frameworktypes.String             `tfsdk:"assistant_arn"`
+	Status                            frameworktypes.String             `tfsdk:"status"`
+	Origin                            frameworktypes.String             `tfsdk:"origin"`
+	ModifiedTime                      frameworktypes.String             `tfsdk:"modified_time"`
+	Tags                              frameworktypes.Map                `tfsdk:"tags"`
+	CreateVersion                     frameworktypes.Bool               `tfsdk:"create_version"`
+	VersionNumber                     frameworktypes.Int64              `tfsdk:"version_number"`
+	QualifiedID                       frameworktypes.String             `tfsdk:"qualified_id"`
+	AnswerRecommendationConfiguration []AnswerRecommendationConfigModel `tfsdk:"answer_recommendation_configuration"`
+	ManualSearchConfiguration         []ManualSearchConfigModel         `tfsdk:"manual_search_configuration"`
+	SelfServiceConfiguration          []SelfServiceConfigModel          `tfsdk:"self_service_configuration"`
+	OrchestrationConfiguration        []OrchestrationConfigModel        `tfsdk:"orchestration_configuration"`
 }
 
 type AnswerRecommendationConfigModel struct {
@@ -90,12 +90,10 @@ type OrchestrationConfigModel struct {
 	Locale                     frameworktypes.String `tfsdk:"locale"`
 }
 
-
-
 type AssociationConfigModel struct {
-	AssociationID              frameworktypes.String        `tfsdk:"association_id"`
-	AssociationType            frameworktypes.String        `tfsdk:"association_type"`
-	KnowledgeBaseConfiguration []KnowledgeBaseConfigModel   `tfsdk:"knowledge_base_configuration"`
+	AssociationID              frameworktypes.String      `tfsdk:"association_id"`
+	AssociationType            frameworktypes.String      `tfsdk:"association_type"`
+	KnowledgeBaseConfiguration []KnowledgeBaseConfigModel `tfsdk:"knowledge_base_configuration"`
 }
 
 type KnowledgeBaseConfigModel struct {
@@ -113,15 +111,24 @@ func (r *ConnectAIAgentResource) ModifyPlan(ctx context.Context, req resource.Mo
 		return
 	}
 
-	// modified_time is updated by AWS on every UpdateAIAgent call.
-	// Mark it Unknown so Terraform accepts the new timestamp after apply.
-	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("modified_time"), frameworktypes.StringUnknown())...)
-
 	var createVersion frameworktypes.Bool
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("create_version"), &createVersion)...)
 	if resp.Diagnostics.HasError() || createVersion.IsNull() || createVersion.IsUnknown() || !createVersion.ValueBool() {
 		return
 	}
+
+	var plan, state ConnectAIAgentResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !aiAgentPlanRequiresNewVersion(&plan, &state) {
+		return
+	}
+
+	// modified_time is updated by AWS on every UpdateAIAgent call.
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("modified_time"), frameworktypes.StringUnknown())...)
 
 	// Read the current version_number live from AWS. A version could have been
 	// created outside of Terraform (console / CLI), making the local state stale.
@@ -526,10 +533,17 @@ func (r *ConnectAIAgentResource) Read(ctx context.Context, req resource.ReadRequ
 		"ai_agent_id":  data.ID.ValueString(),
 	})
 
+	prevVersion := data.VersionNumber
+
 	diags := r.readAndPopulateModel(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// GetAIAgent often omits VersionNumber for the draft agent; keep the last known version.
+	if data.VersionNumber.IsNull() && !prevVersion.IsNull() {
+		data.VersionNumber = prevVersion
 	}
 
 	// Compute qualified_id (id:version_number)
@@ -624,6 +638,11 @@ func (r *ConnectAIAgentResource) Update(ctx context.Context, req resource.Update
 	// Restore planned tags: UpdateAIAgent wipes them and GetAIAgent therefore
 	// returns null; preserve the intent to avoid a provider inconsistency error.
 	data.Tags = plannedTags
+
+	// GetAIAgent often omits VersionNumber for the draft agent; keep the last known version.
+	if data.VersionNumber.IsNull() && !state.VersionNumber.IsNull() {
+		data.VersionNumber = state.VersionNumber
+	}
 
 	// Optionally create a new version AFTER reading back, so the freshly-created
 	// version number is the authoritative final value in state.
@@ -1054,14 +1073,14 @@ func (r *ConnectAIAgentResource) syncTags(
 	if !oldTags.IsNull() && !oldTags.IsUnknown() {
 		oldTags.ElementsAs(ctx, &old, false)
 	}
-	new := make(map[string]string)
+	newTagsMap := make(map[string]string)
 	if !newTags.IsNull() && !newTags.IsUnknown() {
-		newTags.ElementsAs(ctx, &new, false)
+		newTags.ElementsAs(ctx, &newTagsMap, false)
 	}
 
 	// Tags to add or update
 	add := make(map[string]string)
-	for k, v := range new {
+	for k, v := range newTagsMap {
 		if oldVal, exists := old[k]; !exists || oldVal != v {
 			add[k] = v
 		}
@@ -1079,7 +1098,7 @@ func (r *ConnectAIAgentResource) syncTags(
 	// Tags to remove
 	var remove []string
 	for k := range old {
-		if _, exists := new[k]; !exists {
+		if _, exists := newTagsMap[k]; !exists {
 			remove = append(remove, k)
 		}
 	}
@@ -1118,6 +1137,86 @@ func sanitizePreservedTools(tools []types.ToolConfiguration) []types.ToolConfigu
 		}
 	}
 	return out
+}
+
+func aiAgentPlanRequiresNewVersion(plan, state *ConnectAIAgentResourceModel) bool {
+	if !plan.Description.Equal(state.Description) {
+		return true
+	}
+	if !plan.VisibilityStatus.Equal(state.VisibilityStatus) {
+		return true
+	}
+	if !plan.Tags.Equal(state.Tags) {
+		return true
+	}
+	if !orchestrationConfigEqual(plan.OrchestrationConfiguration, state.OrchestrationConfiguration) {
+		return true
+	}
+	if !answerRecommendationConfigEqual(plan.AnswerRecommendationConfiguration, state.AnswerRecommendationConfiguration) {
+		return true
+	}
+	if !manualSearchConfigEqual(plan.ManualSearchConfiguration, state.ManualSearchConfiguration) {
+		return true
+	}
+	if !selfServiceConfigEqual(plan.SelfServiceConfiguration, state.SelfServiceConfiguration) {
+		return true
+	}
+	return false
+}
+
+func orchestrationConfigEqual(plan, state []OrchestrationConfigModel) bool {
+	if len(plan) != len(state) {
+		return false
+	}
+	if len(plan) == 0 {
+		return true
+	}
+	p, s := plan[0], state[0]
+	return p.OrchestrationAIPromptId.Equal(s.OrchestrationAIPromptId) &&
+		p.OrchestrationAIGuardrailId.Equal(s.OrchestrationAIGuardrailId) &&
+		p.ConnectInstanceArn.Equal(s.ConnectInstanceArn) &&
+		p.Locale.Equal(s.Locale)
+}
+
+func answerRecommendationConfigEqual(plan, state []AnswerRecommendationConfigModel) bool {
+	if len(plan) != len(state) {
+		return false
+	}
+	if len(plan) == 0 {
+		return true
+	}
+	p, s := plan[0], state[0]
+	return p.AnswerGenerationAIPromptId.Equal(s.AnswerGenerationAIPromptId) &&
+		p.AnswerGenerationAIGuardrailId.Equal(s.AnswerGenerationAIGuardrailId) &&
+		p.IntentLabelingGenerationAIPromptId.Equal(s.IntentLabelingGenerationAIPromptId) &&
+		p.QueryReformulationAIPromptId.Equal(s.QueryReformulationAIPromptId) &&
+		p.Locale.Equal(s.Locale)
+}
+
+func manualSearchConfigEqual(plan, state []ManualSearchConfigModel) bool {
+	if len(plan) != len(state) {
+		return false
+	}
+	if len(plan) == 0 {
+		return true
+	}
+	p, s := plan[0], state[0]
+	return p.AnswerGenerationAIPromptId.Equal(s.AnswerGenerationAIPromptId) &&
+		p.AnswerGenerationAIGuardrailId.Equal(s.AnswerGenerationAIGuardrailId) &&
+		p.Locale.Equal(s.Locale)
+}
+
+func selfServiceConfigEqual(plan, state []SelfServiceConfigModel) bool {
+	if len(plan) != len(state) {
+		return false
+	}
+	if len(plan) == 0 {
+		return true
+	}
+	p, s := plan[0], state[0]
+	return p.SelfServiceAIGuardrailId.Equal(s.SelfServiceAIGuardrailId) &&
+		p.SelfServiceAnswerGenerationAIPromptId.Equal(s.SelfServiceAnswerGenerationAIPromptId) &&
+		p.SelfServicePreProcessingAIPromptId.Equal(s.SelfServicePreProcessingAIPromptId)
 }
 
 // computeQualifiedID computes the qualified ID (id:version_number) for referencing

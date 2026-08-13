@@ -6,10 +6,9 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
-  "github.com/tecracer/connectracer/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-
+	"github.com/tecracer/connectracer/provider"
+	"log"
 )
 
 var (

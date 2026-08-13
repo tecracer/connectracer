@@ -34,17 +34,17 @@ type QConnectKnowledgeBaseResource struct {
 
 // QConnectKnowledgeBaseResourceModel describes the resource data model.
 type QConnectKnowledgeBaseResourceModel struct {
-	ID                                frameworktypes.String                            `tfsdk:"id"`
-	KnowledgeBaseArn                  frameworktypes.String                            `tfsdk:"knowledge_base_arn"`
-	Name                              frameworktypes.String                            `tfsdk:"name"`
-	KnowledgeBaseType                 frameworktypes.String                            `tfsdk:"knowledge_base_type"`
-	Description                       frameworktypes.String                            `tfsdk:"description"`
-	Tags                              frameworktypes.Map                               `tfsdk:"tags"`
-	TagsAll                           frameworktypes.Map                               `tfsdk:"tags_all"`
-	RenderingConfiguration            *RenderingConfigurationModel                     `tfsdk:"rendering_configuration"`
-	ServerSideEncryptionConfiguration *ServerSideEncryptionConfigurationModel          `tfsdk:"server_side_encryption_configuration"`
-	SourceConfiguration               *SourceConfigurationModel                        `tfsdk:"source_configuration"`
-	Status                            frameworktypes.String                            `tfsdk:"status"`
+	ID                                frameworktypes.String                   `tfsdk:"id"`
+	KnowledgeBaseArn                  frameworktypes.String                   `tfsdk:"knowledge_base_arn"`
+	Name                              frameworktypes.String                   `tfsdk:"name"`
+	KnowledgeBaseType                 frameworktypes.String                   `tfsdk:"knowledge_base_type"`
+	Description                       frameworktypes.String                   `tfsdk:"description"`
+	Tags                              frameworktypes.Map                      `tfsdk:"tags"`
+	TagsAll                           frameworktypes.Map                      `tfsdk:"tags_all"`
+	RenderingConfiguration            *RenderingConfigurationModel            `tfsdk:"rendering_configuration"`
+	ServerSideEncryptionConfiguration *ServerSideEncryptionConfigurationModel `tfsdk:"server_side_encryption_configuration"`
+	SourceConfiguration               *SourceConfigurationModel               `tfsdk:"source_configuration"`
+	Status                            frameworktypes.String                   `tfsdk:"status"`
 }
 
 // RenderingConfigurationModel describes rendering configuration.
@@ -247,7 +247,7 @@ func (r *QConnectKnowledgeBaseResource) Create(ctx context.Context, req resource
 		}
 
 		// Note: data.Tags already contains user-provided tags from plan
-		
+
 		// Store all tags (including provider-added) in state.TagsAll
 		tagsAllMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, allTags)
 		resp.Diagnostics.Append(diags...)
@@ -398,7 +398,7 @@ func (r *QConnectKnowledgeBaseResource) Update(ctx context.Context, req resource
 
 	// Note: AWS Q Connect has limited update capabilities
 	// We can only update tags and templateUri
-	
+
 	// Handle tag updates
 	if !data.Tags.Equal(state.Tags) {
 		knowledgeBaseArn := state.KnowledgeBaseArn.ValueString()

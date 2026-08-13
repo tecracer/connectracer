@@ -170,7 +170,7 @@ func (d *QConnectKnowledgeBaseDataSource) Read(ctx context.Context, req datasour
 	// Map response to model
 	if output.KnowledgeBase != nil {
 		kb := output.KnowledgeBase
-		
+
 		data.ID = frameworktypes.StringPointerValue(kb.KnowledgeBaseId)
 		data.KnowledgeBaseID = frameworktypes.StringPointerValue(kb.KnowledgeBaseId)
 		data.KnowledgeBaseArn = frameworktypes.StringPointerValue(kb.KnowledgeBaseArn)

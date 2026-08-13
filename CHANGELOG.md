@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.5.0] - 2026-08-13
+### Added
+- `connectracer_wisdom_assistant_ai_agents`: optional `orchestrator_use_cases` map (required when assigning an `ORCHESTRATION` agent; e.g. `Connect.SelfService`)
+- `connectracer_lexv2models_bot_locale`: optional `build_on_apply` to run `BuildBotLocale` after create/update
+- `connectracer_q_in_connect_intent`: optional `build_locale_on_apply` to build the locale after intent create/update
+- Shared Lex locale build helper (`provider/lex_bot_locale_build.go`)
+- Provider documentation for `wisdom_assistant_ai_agents`, `lexv2models_bot_locale`, `q_in_connect_intent`, and other previously undocumented resources
+- Example and unit tests for orchestrator use cases and AI agent qualifier handling
+
+### Fixed
+- `connectracer_connect_ai_agent`: with `create_version = true`, publish a new version only when agent configuration actually changes; preserve `version_number` in state when AWS omits it on read
+- `connectracer_connect_ai_prompt`: preserve `version_number` in state when AWS omits it on read
+- `connectracer_wisdom_assistant_ai_agents`: Read compares AI agent assignments semantically so equivalent qualifiers (e.g. `$LATEST` vs `:7`) no longer cause perpetual plan drift, while real console changes (different agent, version, or removal) are still detected
+
 ## [0.4.7] - 2026-07-11
 ### Fix
 - Flows will be update, not replaced

@@ -134,7 +134,7 @@ func (r *ConnectViewResource) Schema(ctx context.Context, req resource.SchemaReq
 				// changes the version number. Keeping UseStateForUnknown here
 				// causes "provider produced inconsistent result after apply" because
 				// the plan would show the old version while the actual result differs.
-				},
+			},
 			"version_description": schema.StringAttribute{
 				MarkdownDescription: "An optional description for the version being published via CreateViewVersion",
 				Optional:            true,

@@ -14,8 +14,8 @@ Provider for AWS Connect and related services
 terraform {
   required_providers {
     connectracer = {
-      source = "github.com/tecracer/connectracer"
-
+      source  = "tecracer/connectracer"
+      version = "~> 0.5.0"
     }
   }
 }
