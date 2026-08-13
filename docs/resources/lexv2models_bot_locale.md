@@ -249,6 +249,22 @@ resource "connectracer_lexv2models_bot_locale" "full" {
 }
 
 # ==============================================================================
+# Build on apply — run BuildBotLocale after create/update (v0.5.0+)
+# ==============================================================================
+resource "connectracer_lexv2models_bot_locale" "with_build" {
+  bot_id      = "ABCDE12345"
+  bot_version = "DRAFT"
+  locale_id   = "en_US"
+  description = "English locale — Terraform waits until Lex finishes building"
+
+  nlu_intent_confidence_threshold = 0.4
+
+  # When true, connectracer calls BuildBotLocale after create and update
+  # and waits until bot_locale_status reaches Built.
+  build_on_apply = true
+}
+
+# ==============================================================================
 # Outputs — reference computed values from other resources
 # ==============================================================================
 output "unified_speech_locale_status" {

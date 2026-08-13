@@ -77,6 +77,10 @@ resource "connectracer_q_in_connect_intent" "full" {
       assistant_arn = connectracer_wisdom_assistant.assistant.id
     }
   }
+
+  # When true, connectracer runs BuildBotLocale for this intent's locale
+  # after create/update and waits until the locale reaches Built (v0.5.0+).
+  build_locale_on_apply = true
 }
 ```
 
