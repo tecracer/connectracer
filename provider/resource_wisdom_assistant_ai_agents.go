@@ -208,7 +208,7 @@ func (r *WisdomAssistantAIAgentsResource) Read(ctx context.Context, req resource
 		"assistant_id": data.AssistantID.ValueString(),
 	})
 
-	_, err := r.client.GetAssistant(ctx, &qconnect.GetAssistantInput{
+	result, err := r.client.GetAssistant(ctx, &qconnect.GetAssistantInput{
 		AssistantId: aws.String(data.AssistantID.ValueString()),
 	})
 	if err != nil {
@@ -219,9 +219,53 @@ func (r *WisdomAssistantAIAgentsResource) Read(ctx context.Context, req resource
 		return
 	}
 
-	// Keep ai_agent_configuration from state. AWS may return a different version
-	// qualifier (e.g. :6 vs :$LATEST) for the same assignment, which would cause
-	// perpetual plan drift if we synced it back from GetAssistant.
+	configuredTypes := make(map[string]string)
+	if !data.AIAgentConfiguration.IsNull() && !data.AIAgentConfiguration.IsUnknown() {
+		diags := data.AIAgentConfiguration.ElementsAs(ctx, &configuredTypes, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	syncedTypes := make(map[string]string)
+	if result.Assistant != nil {
+		for agentType, configuredValue := range configuredTypes {
+			agentData, managed := result.Assistant.AiAgentConfiguration[agentType]
+			if !managed || agentData.AiAgentId == nil || *agentData.AiAgentId == "" {
+				// Assignment removed in AWS — omit from synced state so plan detects drift.
+				continue
+			}
+
+			awsValue := *agentData.AiAgentId
+			equal, err := qualifiedAIAgentIDsSemanticallyEqual(ctx, r.client, data.AssistantID.ValueString(), configuredValue, awsValue)
+			if err != nil {
+				tflog.Warn(ctx, "Unable to compare AI agent assignment semantically; using AWS value",
+					map[string]interface{}{
+						"agent_type": agentType,
+						"error":      err.Error(),
+					})
+				syncedTypes[agentType] = awsValue
+				continue
+			}
+			if equal {
+				syncedTypes[agentType] = configuredValue
+			} else {
+				syncedTypes[agentType] = awsValue
+			}
+		}
+	}
+
+	if len(syncedTypes) > 0 {
+		agentConfigMap, diags := frameworktypes.MapValueFrom(ctx, frameworktypes.StringType, syncedTypes)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		data.AIAgentConfiguration = agentConfigMap
+	} else if len(configuredTypes) > 0 {
+		data.AIAgentConfiguration = frameworktypes.MapNull(frameworktypes.StringType)
+	}
 
 	tflog.Trace(ctx, "Read Wisdom Assistant AI Agents configuration", map[string]interface{}{
 		"assistant_id": data.AssistantID.ValueString(),
