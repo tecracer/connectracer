@@ -254,6 +254,8 @@ func (r *ConnectAIToolResource) Read(ctx context.Context, req resource.ReadReque
 		tool.Instruction != nil, data.Instruction, prior.Instruction,
 		data.InstructionExamples, prior.InstructionExamples,
 	)
+	data.InputSchemaJSON = resolveOmittedStringField(tool.InputSchema != nil, data.InputSchemaJSON, prior.InputSchemaJSON)
+	data.OutputSchemaJSON = resolveOmittedStringField(tool.OutputSchema != nil, data.OutputSchemaJSON, prior.OutputSchemaJSON)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -281,6 +283,20 @@ func resolveOmittedToolFields(
 	}
 
 	return description, instruction, instructionExamples
+}
+
+// resolveOmittedStringField applies the same fallback as resolveOmittedToolFields to a single
+// string field — pulled out separately rather than folded into that function because
+// InputSchemaJSON and OutputSchemaJSON have no paired "examples"-style sibling to carry along.
+// Confirmed live for InputSchema: GetAIAgent returned no inputSchema for a MODEL_CONTEXT_PROTOCOL
+// tool moments after an UpdateAIAgent had set one successfully (the live object still had it —
+// verified independently via the raw API — so this is AWS's read path being unreliable, not the
+// value actually having been lost).
+func resolveOmittedStringField(awsHasField bool, fresh, prior frameworktypes.String) frameworktypes.String {
+	if !awsHasField && !prior.IsNull() {
+		return prior
+	}
+	return fresh
 }
 
 func (r *ConnectAIToolResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

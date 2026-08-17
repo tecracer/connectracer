@@ -100,3 +100,47 @@ func TestResolveOmittedToolFields(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveOmittedStringField(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		awsHasField bool
+		fresh       frameworktypes.String
+		prior       frameworktypes.String
+		want        frameworktypes.String
+	}{
+		{
+			name:        "AWS returns the field: use the fresh value",
+			awsHasField: true,
+			fresh:       frameworktypes.StringValue("new schema"),
+			prior:       frameworktypes.StringValue("old schema"),
+			want:        frameworktypes.StringValue("new schema"),
+		},
+		{
+			name:        "AWS omits the field but a prior value exists: fall back to prior",
+			awsHasField: false,
+			fresh:       frameworktypes.StringNull(),
+			prior:       frameworktypes.StringValue("old schema"),
+			want:        frameworktypes.StringValue("old schema"),
+		},
+		{
+			name:        "AWS omits the field and there was never a prior value: stays null",
+			awsHasField: false,
+			fresh:       frameworktypes.StringNull(),
+			prior:       frameworktypes.StringNull(),
+			want:        frameworktypes.StringNull(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := resolveOmittedStringField(tc.awsHasField, tc.fresh, tc.prior)
+			if !got.Equal(tc.want) {
+				t.Errorf("resolveOmittedStringField() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
