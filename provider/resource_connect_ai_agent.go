@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	frameworktypes "github.com/hashicorp/terraform-plugin-framework/types"
@@ -292,9 +291,10 @@ func (r *ConnectAIAgentResource) Schema(ctx context.Context, req resource.Schema
 			"version_number": schema.Int64Attribute{
 				MarkdownDescription: "The version number of the AI Agent (populated when `create_version` is true)",
 				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
-				},
+				// No UseStateForUnknown: with create_version true, Update calls
+				// createVersion and the number changes, so promising the prior value at
+				// plan time yields "inconsistent result after apply". resolveVersionNumber
+				// covers the create_version false case instead.
 			},
 			"qualified_id": schema.StringAttribute{
 				MarkdownDescription: "The AI Agent ID with version qualifier appended (e.g., `id:version_number`). Use this to reference the agent from other resources",
@@ -513,6 +513,8 @@ func (r *ConnectAIAgentResource) Create(ctx context.Context, req resource.Create
 		}
 	}
 
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, frameworktypes.Int64Null())
+
 	// Compute qualified_id (id:version_number)
 	data.QualifiedID = r.computeQualifiedID(&data)
 
@@ -542,9 +544,7 @@ func (r *ConnectAIAgentResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	// GetAIAgent often omits VersionNumber for the draft agent; keep the last known version.
-	if data.VersionNumber.IsNull() && !prevVersion.IsNull() {
-		data.VersionNumber = prevVersion
-	}
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, prevVersion)
 
 	// Compute qualified_id (id:version_number)
 	data.QualifiedID = r.computeQualifiedID(&data)
@@ -640,9 +640,7 @@ func (r *ConnectAIAgentResource) Update(ctx context.Context, req resource.Update
 	data.Tags = plannedTags
 
 	// GetAIAgent often omits VersionNumber for the draft agent; keep the last known version.
-	if data.VersionNumber.IsNull() && !state.VersionNumber.IsNull() {
-		data.VersionNumber = state.VersionNumber
-	}
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, state.VersionNumber)
 
 	// Optionally create a new version AFTER reading back, so the freshly-created
 	// version number is the authoritative final value in state.

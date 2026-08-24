@@ -643,29 +643,6 @@ func (r *ConnectAIPromptResource) createVersion(ctx context.Context, assistantID
 	return versionNumber, nil
 }
 
-// resolveVersionNumber settles the final version_number for state.
-//
-// version_number is Computed with no plan modifier, so Terraform plans it as unknown
-// whenever the resource changes. Only the create_version branch ever assigns it and
-// GetAIPrompt omits it for the draft, so with create_version false it would stay
-// unknown and Terraform rejects the apply with "provider returned invalid result
-// object after apply". An unresolved value therefore falls back to the prior state,
-// and to null when there is none.
-//
-// Deliberately not solved with UseStateForUnknown: with create_version true the number
-// legitimately changes during apply, and pinning the planned value to the prior state
-// would trade this error for "inconsistent result after apply" — the same trap
-// documented on the View resource's version attribute.
-func resolveVersionNumber(current, prior frameworktypes.Int64) frameworktypes.Int64 {
-	if !current.IsNull() && !current.IsUnknown() {
-		return current
-	}
-	if !prior.IsNull() && !prior.IsUnknown() {
-		return prior
-	}
-	return frameworktypes.Int64Null()
-}
-
 // computeQualifiedID computes the qualified ID (id:version_number) for referencing
 // the AI Prompt from other resources like AI Agents.
 func (r *ConnectAIPromptResource) computeQualifiedID(data *ConnectAIPromptResourceModel) frameworktypes.String {
