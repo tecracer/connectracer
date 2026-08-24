@@ -329,6 +329,8 @@ func (r *ConnectAIPromptResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, frameworktypes.Int64Null())
+
 	// Compute qualified_id (id:version_number)
 	data.QualifiedID = r.computeQualifiedID(&data)
 
@@ -357,9 +359,7 @@ func (r *ConnectAIPromptResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	if data.VersionNumber.IsNull() && !prevVersion.IsNull() {
-		data.VersionNumber = prevVersion
-	}
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, prevVersion)
 
 	// Compute qualified_id (id:version_number)
 	data.QualifiedID = r.computeQualifiedID(&data)
@@ -440,9 +440,7 @@ func (r *ConnectAIPromptResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	if data.VersionNumber.IsNull() && !state.VersionNumber.IsNull() {
-		data.VersionNumber = state.VersionNumber
-	}
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, state.VersionNumber)
 
 	// Compute qualified_id (id:version_number)
 	data.QualifiedID = r.computeQualifiedID(&data)
@@ -643,6 +641,29 @@ func (r *ConnectAIPromptResource) createVersion(ctx context.Context, assistantID
 	})
 
 	return versionNumber, nil
+}
+
+// resolveVersionNumber settles the final version_number for state.
+//
+// version_number is Computed with no plan modifier, so Terraform plans it as unknown
+// whenever the resource changes. Only the create_version branch ever assigns it and
+// GetAIPrompt omits it for the draft, so with create_version false it would stay
+// unknown and Terraform rejects the apply with "provider returned invalid result
+// object after apply". An unresolved value therefore falls back to the prior state,
+// and to null when there is none.
+//
+// Deliberately not solved with UseStateForUnknown: with create_version true the number
+// legitimately changes during apply, and pinning the planned value to the prior state
+// would trade this error for "inconsistent result after apply" — the same trap
+// documented on the View resource's version attribute.
+func resolveVersionNumber(current, prior frameworktypes.Int64) frameworktypes.Int64 {
+	if !current.IsNull() && !current.IsUnknown() {
+		return current
+	}
+	if !prior.IsNull() && !prior.IsUnknown() {
+		return prior
+	}
+	return frameworktypes.Int64Null()
 }
 
 // computeQualifiedID computes the qualified ID (id:version_number) for referencing
