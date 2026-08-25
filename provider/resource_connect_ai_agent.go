@@ -1113,10 +1113,21 @@ func (r *ConnectAIAgentResource) syncTags(
 	return nil
 }
 
-// sanitizePreservedTools strips fields that the QConnect API does not accept
-// when passed back in an UpdateAIAgent call. MODEL_CONTEXT_PROTOCOL tools are
-// fully server-managed: only ToolName and ToolType may be present; any other
-// field (InputSchema, OutputSchema, Description, …) causes a ValidationException.
+// sanitizePreservedTools prepares tools read back from GetAIAgent so they can be passed
+// to UpdateAIAgent unchanged, since that call replaces the agent's whole tool list and
+// every tool not in it is dropped.
+//
+// MODEL_CONTEXT_PROTOCOL tools carry server-owned fields that UpdateAIAgent rejects when
+// echoed back, so those are stripped. Instruction, Description and Title are not among
+// them: they are caller-supplied, connectracer_connect_ai_tool sets all three on exactly
+// this tool type, and UpdateAIAgent accepts them. Dropping them here meant that updating
+// any *sibling* tool on the same agent silently blanked the MCP tool's instruction —
+// invisible to Terraform, which sees only the resource it is updating and reports "No
+// changes" for the rest.
+//
+// A field the read omitted stays omitted; there is nothing to preserve in that case. That
+// window is real for MCP tools (see the description/instruction note in CHANGELOG.md) but
+// transient, whereas stripping on every write was not.
 func sanitizePreservedTools(tools []types.ToolConfiguration) []types.ToolConfiguration {
 	if len(tools) == 0 {
 		return nil
@@ -1124,11 +1135,13 @@ func sanitizePreservedTools(tools []types.ToolConfiguration) []types.ToolConfigu
 	out := make([]types.ToolConfiguration, len(tools))
 	for i, t := range tools {
 		if t.ToolType == types.ToolTypeModelContextProtocol {
-			// Keep only the identity fields; the MCP gateway owns everything else.
 			out[i] = types.ToolConfiguration{
-				ToolName: t.ToolName,
-				ToolType: t.ToolType,
-				ToolId:   t.ToolId,
+				ToolName:    t.ToolName,
+				ToolType:    t.ToolType,
+				ToolId:      t.ToolId,
+				Title:       t.Title,
+				Description: t.Description,
+				Instruction: t.Instruction,
 			}
 		} else {
 			out[i] = t
