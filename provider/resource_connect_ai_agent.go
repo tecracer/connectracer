@@ -1117,13 +1117,16 @@ func (r *ConnectAIAgentResource) syncTags(
 // to UpdateAIAgent unchanged, since that call replaces the agent's whole tool list and
 // every tool not in it is dropped.
 //
-// MODEL_CONTEXT_PROTOCOL tools carry server-owned fields that UpdateAIAgent rejects when
-// echoed back, so those are stripped. Instruction, Description and Title are not among
-// them: they are caller-supplied, connectracer_connect_ai_tool sets all three on exactly
-// this tool type, and UpdateAIAgent accepts them. Dropping them here meant that updating
-// any *sibling* tool on the same agent silently blanked the MCP tool's instruction —
-// invisible to Terraform, which sees only the resource it is updating and reports "No
-// changes" for the rest.
+// MODEL_CONTEXT_PROTOCOL tools are largely server-managed and most fields must not be
+// echoed back. Instruction is the exception: the caller supplies it, the MCP gateway does
+// not, and dropping it here meant that updating any *sibling* tool on the same agent
+// silently blanked it — invisible to Terraform, which sees only the resource it is
+// updating and reports "No changes" for the rest.
+//
+// Description and Title stay stripped on purpose. The gateway derives them from the
+// backing flow module and overwrites whatever UpdateAIAgent sends, so preserving them
+// pins a value that snaps back on the next read and yields a permanent plan diff —
+// verified live against a flow-module-backed tool.
 //
 // A field the read omitted stays omitted; there is nothing to preserve in that case. That
 // window is real for MCP tools (see the description/instruction note in CHANGELOG.md) but
@@ -1139,8 +1142,6 @@ func sanitizePreservedTools(tools []types.ToolConfiguration) []types.ToolConfigu
 				ToolName:    t.ToolName,
 				ToolType:    t.ToolType,
 				ToolId:      t.ToolId,
-				Title:       t.Title,
-				Description: t.Description,
 				Instruction: t.Instruction,
 			}
 		} else {

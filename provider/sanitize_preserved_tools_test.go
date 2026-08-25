@@ -22,7 +22,7 @@ func TestSanitizePreservedTools(t *testing.T) {
 		Instruction: &types.ToolInstruction{Instruction: aws.String("Always call this before ...")},
 	}
 
-	t.Run("keeps caller-supplied fields on an MCP tool", func(t *testing.T) {
+	t.Run("keeps the instruction but not gateway-owned fields on an MCP tool", func(t *testing.T) {
 		t.Parallel()
 		got := sanitizePreservedTools([]types.ToolConfiguration{mcp})
 		if len(got) != 1 {
@@ -31,11 +31,13 @@ func TestSanitizePreservedTools(t *testing.T) {
 		if got[0].Instruction == nil || aws.ToString(got[0].Instruction.Instruction) != "Always call this before ..." {
 			t.Errorf("instruction not preserved: %+v", got[0].Instruction)
 		}
-		if aws.ToString(got[0].Description) != aws.ToString(mcp.Description) {
-			t.Errorf("description not preserved: %q", aws.ToString(got[0].Description))
+		// Description and Title are gateway-owned and must NOT be echoed back:
+		// preserving them pins a value AWS overwrites, producing a permanent plan diff.
+		if got[0].Description != nil {
+			t.Errorf("description must be stripped, got %q", aws.ToString(got[0].Description))
 		}
-		if aws.ToString(got[0].Title) != aws.ToString(mcp.Title) {
-			t.Errorf("title not preserved: %q", aws.ToString(got[0].Title))
+		if got[0].Title != nil {
+			t.Errorf("title must be stripped, got %q", aws.ToString(got[0].Title))
 		}
 		if aws.ToString(got[0].ToolId) != aws.ToString(mcp.ToolId) {
 			t.Errorf("tool id not preserved: %q", aws.ToString(got[0].ToolId))
