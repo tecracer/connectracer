@@ -329,6 +329,8 @@ func (r *ConnectAIPromptResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, frameworktypes.Int64Null())
+
 	// Compute qualified_id (id:version_number)
 	data.QualifiedID = r.computeQualifiedID(&data)
 
@@ -357,9 +359,7 @@ func (r *ConnectAIPromptResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	if data.VersionNumber.IsNull() && !prevVersion.IsNull() {
-		data.VersionNumber = prevVersion
-	}
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, prevVersion)
 
 	// Compute qualified_id (id:version_number)
 	data.QualifiedID = r.computeQualifiedID(&data)
@@ -440,9 +440,7 @@ func (r *ConnectAIPromptResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	if data.VersionNumber.IsNull() && !state.VersionNumber.IsNull() {
-		data.VersionNumber = state.VersionNumber
-	}
+	data.VersionNumber = resolveVersionNumber(data.VersionNumber, state.VersionNumber)
 
 	// Compute qualified_id (id:version_number)
 	data.QualifiedID = r.computeQualifiedID(&data)

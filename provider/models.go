@@ -11,3 +11,13 @@ import (
 type ServerSideEncryptionConfigurationModel struct {
 	KmsKeyId frameworktypes.String `tfsdk:"kms_key_id"`
 }
+
+func resolveVersionNumber(current, prior frameworktypes.Int64) frameworktypes.Int64 {
+	if !current.IsNull() && !current.IsUnknown() {
+		return current
+	}
+	if !prior.IsNull() && !prior.IsUnknown() {
+		return prior
+	}
+	return frameworktypes.Int64Null()
+}

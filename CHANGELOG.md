@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.6.0] - 2026-08-17
+### Added
+- `connectracer_connect_flow_module_tool`: manages a Flow Module with `ExternalInvocationConfiguration` enabled, so it can be invoked outside of a flow as a tool (e.g. Amazon Connect's "module as tool" support for Q in Connect orchestrator AI agents). Owns the full flow module (content, name, description, settings, tags) since `ExternalInvocationConfiguration` is create-only on the AWS API. `description` is required and a version is released automatically via `CreateContactFlowModuleVersion` on creation and on every `content`/`settings` change — confirmed against a live instance that a tool module without a description or without a released version silently fails to appear as grantable in any security profile, even though `ExternalInvocationConfiguration.Enabled` already reads back as `true`. New computed `mcp_tool_id` attribute (`aws_custom_flows__<flow_module_id>_<version>`) — the actual value `UpdateAIAgent` expects as a `MODEL_CONTEXT_PROTOCOL` tool's `tool_id`, reverse-engineered from a console-created tool module since it's undocumented and the raw flow module `id` is rejected with "not found in MCP tools".
+- `connectracer_connect_security_profile_flow_module`: grants a Security Profile permission to invoke a Flow Module as a tool (`AllowedFlowModules` on `UpdateSecurityProfile`), with a safe read-modify-write so it coexists with `aws_connect_security_profile` managing the rest of the security profile
+- `connectracer_connect_ai_agent_security_profile`: associates a Security Profile with a Q in Connect AI Agent (`AssociateSecurityProfiles`/`DisassociateSecurityProfiles`, `EntityType=AI_AGENT`) — required before an agent can invoke any governed tool (Flow Module tools, AgentCore/MCP tools, out-of-the-box tools); `RETURN_TO_CONTROL` tools don't need it
+- `connectracer_connect_ai_tool`: new optional `tool_id` attribute — required for `MODEL_CONTEXT_PROTOCOL` tools (`UpdateAIAgent` otherwise rejects them with "require toolId as input for MCP identifier"); for a flow module tool this is the flow module's own `id`. Create/Update retry on eventual consistency when `UpdateAIAgent` reports the `tool_id` as "not found in MCP tools" shortly after the security profile grant that makes it visible to QConnect.
+
+### Fixed
+- `connectracer_connect_ai_tool`: preserve `description`/`instruction` in state when `GetAIAgent` omits them on read — confirmed for a `MODEL_CONTEXT_PROTOCOL` tool backed by a flow module, where a just-applied description/instruction read back as absent on the very next refresh, causing a perpetual plan diff
+- Examples and unit tests for all three new resources
+
 ## [0.5.0] - 2026-08-13
 ### Added
 - `connectracer_wisdom_assistant_ai_agents`: optional `orchestrator_use_cases` map (required when assigning an `ORCHESTRATION` agent; e.g. `Connect.SelfService`)

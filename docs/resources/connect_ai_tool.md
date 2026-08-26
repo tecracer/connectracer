@@ -147,8 +147,14 @@ resource "connectracer_connect_ai_tool" "check_order_status" {
   assistant_id = "12345678-1234-1234-1234-123456789012"
   ai_agent_id  = "60dfa473-aaaa-bbbb-cccc-dddddddddddd"
 
-  tool_name   = "CheckOrderStatus"
-  tool_type   = "MODEL_CONTEXT_PROTOCOL"
+  tool_name = "CheckOrderStatus"
+  tool_type = "MODEL_CONTEXT_PROTOCOL"
+  # Required for MODEL_CONTEXT_PROTOCOL tools — otherwise UpdateAIAgent rejects
+  # the tool with "require toolId as input for MCP identifier". For a flow
+  # module tool this is NOT the flow module's own id — use its computed
+  # mcp_tool_id instead (UpdateAIAgent rejects the raw id with "not found in
+  # MCP tools"), e.g. connectracer_connect_flow_module_tool.check_order_status.mcp_tool_id.
+  tool_id     = "aws_custom_flows__abcdefab-1234-1234-1234-abcdefabcdef_1"
   description = "Look up the current status of a customer order."
 
   input_schema_json = jsonencode({
@@ -207,6 +213,7 @@ resource "connectracer_connect_ai_tool" "cancel_order" {
 - `instruction_examples` (List of String) A list of example strings illustrating tool usage
 - `output_schema_json` (String) The output schema for the tool as a JSON string
 - `title` (String) A short human-readable title for the tool
+- `tool_id` (String) The identifier of the underlying tool on its MCP server — required when `tool_type` is `MODEL_CONTEXT_PROTOCOL` (`UpdateAIAgent` rejects the tool otherwise with "require toolId as input for MCP identifier"). For a flow module tool (`connectracer_connect_flow_module_tool`), this is **not** the flow module's own `id` (`UpdateAIAgent` rejects that with "not found in MCP tools") — use its computed `mcp_tool_id` attribute instead.
 - `user_confirmation_required` (Boolean) Whether the user must confirm the action before the tool is executed
 
 ### Read-Only

@@ -44,6 +44,7 @@ type ConnectAIToolResourceModel struct {
 	AIAgentID                frameworktypes.String `tfsdk:"ai_agent_id"`
 	ToolName                 frameworktypes.String `tfsdk:"tool_name"`
 	ToolType                 frameworktypes.String `tfsdk:"tool_type"`
+	ToolID                   frameworktypes.String `tfsdk:"tool_id"`
 	Title                    frameworktypes.String `tfsdk:"title"`
 	Description              frameworktypes.String `tfsdk:"description"`
 	InputSchemaJSON          frameworktypes.String `tfsdk:"input_schema_json"`
@@ -97,6 +98,14 @@ func (r *ConnectAIToolResource) Schema(_ context.Context, _ resource.SchemaReque
 			"tool_type": schema.StringAttribute{
 				MarkdownDescription: "The type of the tool. Valid values: `RETURN_TO_CONTROL`, `MODEL_CONTEXT_PROTOCOL`, `CONSTANT`",
 				Required:            true,
+			},
+			"tool_id": schema.StringAttribute{
+				MarkdownDescription: "The identifier of the underlying tool on its MCP server — required when `tool_type` " +
+					"is `MODEL_CONTEXT_PROTOCOL` (`UpdateAIAgent` rejects the tool otherwise with \"require toolId as input " +
+					"for MCP identifier\"). For a flow module tool (`connectracer_connect_flow_module_tool`), this is " +
+					"**not** the flow module's own `id` (`UpdateAIAgent` rejects that with \"not found in MCP tools\") — " +
+					"use its computed `mcp_tool_id` attribute instead.",
+				Optional: true,
 			},
 			"title": schema.StringAttribute{
 				MarkdownDescription: "A short human-readable title for the tool",
@@ -181,7 +190,23 @@ func (r *ConnectAIToolResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	orchConfig.ToolConfigurations = append(orchConfig.ToolConfigurations, newTool)
-	if err := r.updateAgentTools(ctx, agent, orchConfig); err != nil {
+
+	// UpdateAIAgent can reject a MODEL_CONTEXT_PROTOCOL tool_id as "not found in
+	// MCP tools" for a few seconds/minutes after the security profile grant that
+	// makes it visible to QConnect (connectracer_connect_security_profile_flow_module
+	// for a flow module tool) — the same kind of eventual-consistency gap observed
+	// between CreateSecurityProfile/CreateContactFlowModule and their downstream
+	// consumers elsewhere in this provider.
+	toolID := data.ToolID.ValueString()
+	err = retryOnEventualConsistency(ctx,
+		func(err error) bool {
+			return toolID != "" && strings.Contains(err.Error(), "not found in MCP tools") && strings.Contains(err.Error(), toolID)
+		},
+		func() error {
+			return r.updateAgentTools(ctx, agent, orchConfig)
+		},
+	)
+	if err != nil {
 		resp.Diagnostics.AddError("Error creating AI Tool", err.Error())
 		return
 	}
@@ -216,13 +241,62 @@ func (r *ConnectAIToolResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
+	prior := data
+
 	diags := r.populateModelFromTool(ctx, tool, &data)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	data.Description, data.Instruction, data.InstructionExamples = resolveOmittedToolFields(
+		tool.Description != nil, data.Description, prior.Description,
+		tool.Instruction != nil, data.Instruction, prior.Instruction,
+		data.InstructionExamples, prior.InstructionExamples,
+	)
+	data.InputSchemaJSON = resolveOmittedStringField(tool.InputSchema != nil, data.InputSchemaJSON, prior.InputSchemaJSON)
+	data.OutputSchemaJSON = resolveOmittedStringField(tool.OutputSchema != nil, data.OutputSchemaJSON, prior.OutputSchemaJSON)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// resolveOmittedToolFields decides the description/instruction/instructionExamples to keep in
+// state after a refresh. GetAIAgent does not reliably return description/instruction for a
+// MODEL_CONTEXT_PROTOCOL tool backed by a flow module — confirmed by a persistent plan diff where
+// a description/instruction that was just applied reads back as absent on the very next refresh.
+// When AWS omits a field (awsHasX is false), this falls back to the prior state's value instead
+// of treating the omission as the user having cleared it, the same way version_number is
+// preserved elsewhere in this provider when AWS omits it on read.
+func resolveOmittedToolFields(
+	awsHasDescription bool, freshDescription, priorDescription frameworktypes.String,
+	awsHasInstruction bool, freshInstruction, priorInstruction frameworktypes.String,
+	freshInstructionExamples, priorInstructionExamples frameworktypes.List,
+) (description, instruction frameworktypes.String, instructionExamples frameworktypes.List) {
+	description = freshDescription
+	if !awsHasDescription && !priorDescription.IsNull() {
+		description = priorDescription
+	}
+
+	instruction, instructionExamples = freshInstruction, freshInstructionExamples
+	if !awsHasInstruction && !priorInstruction.IsNull() {
+		instruction, instructionExamples = priorInstruction, priorInstructionExamples
+	}
+
+	return description, instruction, instructionExamples
+}
+
+// resolveOmittedStringField applies the same fallback as resolveOmittedToolFields to a single
+// string field — pulled out separately rather than folded into that function because
+// InputSchemaJSON and OutputSchemaJSON have no paired "examples"-style sibling to carry along.
+// Confirmed live for InputSchema: GetAIAgent returned no inputSchema for a MODEL_CONTEXT_PROTOCOL
+// tool moments after an UpdateAIAgent had set one successfully (the live object still had it —
+// verified independently via the raw API — so this is AWS's read path being unreliable, not the
+// value actually having been lost).
+func resolveOmittedStringField(awsHasField bool, fresh, prior frameworktypes.String) frameworktypes.String {
+	if !awsHasField && !prior.IsNull() {
+		return prior
+	}
+	return fresh
 }
 
 func (r *ConnectAIToolResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -257,7 +331,16 @@ func (r *ConnectAIToolResource) Update(ctx context.Context, req resource.UpdateR
 		orchConfig.ToolConfigurations = append(orchConfig.ToolConfigurations, updatedTool)
 	}
 
-	if err := r.updateAgentTools(ctx, agent, orchConfig); err != nil {
+	toolID := data.ToolID.ValueString()
+	err = retryOnEventualConsistency(ctx,
+		func(err error) bool {
+			return toolID != "" && strings.Contains(err.Error(), "not found in MCP tools") && strings.Contains(err.Error(), toolID)
+		},
+		func() error {
+			return r.updateAgentTools(ctx, agent, orchConfig)
+		},
+	)
+	if err != nil {
 		resp.Diagnostics.AddError("Error updating AI Tool", err.Error())
 		return
 	}
@@ -401,6 +484,9 @@ func (r *ConnectAIToolResource) buildToolFromModel(ctx context.Context, data *Co
 	if !data.Description.IsNull() && !data.Description.IsUnknown() {
 		tc.Description = aws.String(data.Description.ValueString())
 	}
+	if !data.ToolID.IsNull() && !data.ToolID.IsUnknown() {
+		tc.ToolId = aws.String(data.ToolID.ValueString())
+	}
 
 	// InputSchema: JSON string → smithy document
 	if !data.InputSchemaJSON.IsNull() && !data.InputSchemaJSON.IsUnknown() {
@@ -467,6 +553,12 @@ func (r *ConnectAIToolResource) populateModelFromTool(ctx context.Context, tc *t
 		data.Description = frameworktypes.StringPointerValue(tc.Description)
 	} else {
 		data.Description = frameworktypes.StringNull()
+	}
+
+	if tc.ToolId != nil {
+		data.ToolID = frameworktypes.StringPointerValue(tc.ToolId)
+	} else {
+		data.ToolID = frameworktypes.StringNull()
 	}
 
 	// InputSchema → JSON string
