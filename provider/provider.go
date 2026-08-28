@@ -150,6 +150,8 @@ func (p *connectracerProvider) Resources(ctx context.Context) []func() resource.
 		NewConnectFlowModuleToolResource,
 		NewConnectSecurityProfileFlowModuleResource,
 		NewConnectAIAgentSecurityProfileResource,
+		NewLexV2ModelsIntentSlotPrioritiesResource,
+		NewLexV2ModelsBotLocaleBuildResource,
 	}
 }
 
