@@ -42,6 +42,7 @@ type LexV2ModelsIntentSlotPrioritiesResourceModel struct {
 	BotVersion     frameworktypes.String          `tfsdk:"bot_version"`
 	LocaleID       frameworktypes.String          `tfsdk:"locale_id"`
 	IntentID       frameworktypes.String          `tfsdk:"intent_id"`
+	Triggers       frameworktypes.Map             `tfsdk:"triggers"`
 	SlotPriorities []LexV2ModelsSlotPriorityModel `tfsdk:"slot_priority"`
 }
 
@@ -89,6 +90,14 @@ func (r *LexV2ModelsIntentSlotPrioritiesResource) Schema(ctx context.Context, re
 				MarkdownDescription: "Identifier of the intent whose slots are being ordered",
 				Required:            true,
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			},
+			"triggers": schema.MapAttribute{
+				MarkdownDescription: "Arbitrary values that force the priorities to be written again when they change. " +
+					"Reference whatever else updates the intent, such as its sample utterances: `UpdateIntent` replaces " +
+					"the whole intent, so an `aws_lexv2models_intent` update clears the priorities this resource set, and " +
+					"without a trigger they are only restored on the apply after next.",
+				ElementType: frameworktypes.StringType,
+				Optional:    true,
 			},
 		},
 

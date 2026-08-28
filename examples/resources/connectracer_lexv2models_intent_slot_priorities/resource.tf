@@ -9,7 +9,7 @@
 #
 # So the intent is created without them and this resource sets them afterwards.
 
-resource "aws_lexv2models_intent" "recording_consent" {
+resource "connectracer_lexv2models_intent" "recording_consent" {
   bot_id      = "ABCDE12345"
   bot_version = "DRAFT"
   locale_id   = "de_DE"
@@ -21,7 +21,7 @@ resource "aws_lexv2models_slot" "answer" {
   bot_id       = "ABCDE12345"
   bot_version  = "DRAFT"
   locale_id    = "de_DE"
-  intent_id    = aws_lexv2models_intent.recording_consent.intent_id
+  intent_id    = connectracer_lexv2models_intent.recording_consent.intent_id
   name         = "answer"
   slot_type_id = "ZYXWV98765"
 
@@ -48,7 +48,7 @@ resource "connectracer_lexv2models_intent_slot_priorities" "recording_consent" {
   bot_id      = "ABCDE12345"
   bot_version = "DRAFT"
   locale_id   = "de_DE"
-  intent_id   = aws_lexv2models_intent.recording_consent.intent_id
+  intent_id   = connectracer_lexv2models_intent.recording_consent.intent_id
 
   slot_priority {
     priority = 1

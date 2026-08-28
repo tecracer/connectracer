@@ -10,7 +10,7 @@ An `aws_lexv2models_slot` is created with the id of the intent it belongs to, an
 intent -> slot_priority.slot_id -> slot -> intent_id -> intent
 ```
 
-Terraform reports that as `Cycle: aws_lexv2models_slot.x, aws_lexv2models_intent.y`. Splitting the priorities out is the same shape as `aws_security_group_rule` next to `aws_security_group`: the association becomes its own resource so the graph stays acyclic.
+Terraform reports that as `Cycle: aws_lexv2models_slot.x, <intent>.y`. Splitting the priorities out is the same shape as `aws_security_group_rule` next to `aws_security_group`: the association becomes its own resource so the graph stays acyclic.
 
 Without it the locale build fails with:
 
@@ -18,6 +18,10 @@ Without it the locale build fails with:
 Slot ids [answer] in intent RecordingConsent don't define a slot priority.
 Update the intent to add a priority to these slots.
 ```
+
+## Use it with `connectracer_lexv2models_intent`
+
+Not with `aws_lexv2models_intent`. That resource carries `slot_priority` in its own schema, so it plans the priorities away on every refresh while this resource plans them back, and the two never converge. `connectracer_lexv2models_intent` does not model slot priorities and carries them over on every update, which is what makes the pair correct without a `lifecycle` exception.
 
 ## Read-modify-write
 
@@ -34,7 +38,7 @@ resource "connectracer_lexv2models_intent_slot_priorities" "recording_consent" {
   bot_id      = aws_lexv2models_bot.consent.id
   bot_version = "DRAFT"
   locale_id   = "de_DE"
-  intent_id   = aws_lexv2models_intent.recording_consent.intent_id
+  intent_id   = connectracer_lexv2models_intent.recording_consent.intent_id
 
   slot_priority {
     priority = 1

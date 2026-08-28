@@ -30,7 +30,7 @@ Every other field of the intent is read back and sent again unchanged, since `Up
 #
 # So the intent is created without them and this resource sets them afterwards.
 
-resource "aws_lexv2models_intent" "recording_consent" {
+resource "connectracer_lexv2models_intent" "recording_consent" {
   bot_id      = "ABCDE12345"
   bot_version = "DRAFT"
   locale_id   = "de_DE"
@@ -42,7 +42,7 @@ resource "aws_lexv2models_slot" "answer" {
   bot_id       = "ABCDE12345"
   bot_version  = "DRAFT"
   locale_id    = "de_DE"
-  intent_id    = aws_lexv2models_intent.recording_consent.intent_id
+  intent_id    = connectracer_lexv2models_intent.recording_consent.intent_id
   name         = "answer"
   slot_type_id = "ZYXWV98765"
 
@@ -69,7 +69,7 @@ resource "connectracer_lexv2models_intent_slot_priorities" "recording_consent" {
   bot_id      = "ABCDE12345"
   bot_version = "DRAFT"
   locale_id   = "de_DE"
-  intent_id   = aws_lexv2models_intent.recording_consent.intent_id
+  intent_id   = connectracer_lexv2models_intent.recording_consent.intent_id
 
   slot_priority {
     priority = 1
@@ -128,6 +128,7 @@ resource "connectracer_lexv2models_bot_locale_build" "consent" {
 ### Optional
 
 - `slot_priority` (Block List) One entry per slot of the intent. Lex elicits slots in ascending priority. (see [below for nested schema](#nestedblock--slot_priority))
+- `triggers` (Map of String) Arbitrary values that force the priorities to be written again when they change. Reference whatever else updates the intent, such as its sample utterances: `UpdateIntent` replaces the whole intent, so an `aws_lexv2models_intent` update clears the priorities this resource set, and without a trigger they are only restored on the apply after next.
 
 ### Read-Only
 
