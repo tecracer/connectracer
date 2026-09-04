@@ -18,7 +18,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	frameworktypes "github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -382,16 +384,19 @@ func (r *ConnectAIAgentResource) Schema(ctx context.Context, req resource.Schema
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"orchestration_ai_prompt_id": schema.StringAttribute{
-							MarkdownDescription: "The AI Prompt ID for orchestration",
-							Required:            true,
+							MarkdownDescription: "The AI Prompt ID for orchestration. When omitted the agent uses the default system prompt.",
+							Optional:            true,
+							Validators: []validator.String{
+								stringvalidator.LengthAtLeast(1),
+							},
 						},
 						"orchestration_ai_guardrail_id": schema.StringAttribute{
 							MarkdownDescription: "The AI Guardrail ID for orchestration",
 							Optional:            true,
 						},
 						"connect_instance_arn": schema.StringAttribute{
-							MarkdownDescription: "The Amazon Connect instance ARN",
-							Optional:            true,
+							MarkdownDescription: "The Amazon Connect instance ARN. Required for ORCHESTRATION agents.",
+							Required:            true,
 						},
 						"locale": schema.StringAttribute{
 							MarkdownDescription: "The locale for the configuration",
@@ -923,13 +928,22 @@ func (r *ConnectAIAgentResource) createVersion(ctx context.Context, assistantID,
 // buildAIAgentConfiguration builds the AIAgentConfiguration from the model's nested blocks.
 // preservedTools carries existing ToolConfigurations from a prior GetAIAgent call so that
 // tools managed by connectracer_connect_ai_tool resources survive an UpdateAIAgent call.
+// buildAIAgentConfiguration builds the AIAgentConfiguration from the model's nested blocks.
+// It dispatches on data.Type so the configuration member always matches the declared type,
+// avoiding the "Invalid request body" 400 that the API returns when the union member and
+// the type field disagree.
+// preservedTools carries existing ToolConfigurations from a prior GetAIAgent call so that
+// tools managed by connectracer_connect_ai_tool resources survive an UpdateAIAgent call.
 func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentResourceModel, preservedTools []types.ToolConfiguration) types.AIAgentConfiguration {
-	if len(data.AnswerRecommendationConfiguration) > 0 {
+	switch data.Type.ValueString() {
+	case "ANSWER_RECOMMENDATION":
+		if len(data.AnswerRecommendationConfiguration) == 0 {
+			return nil
+		}
 		cfg := data.AnswerRecommendationConfiguration[0]
 		value := types.AnswerRecommendationAIAgentConfiguration{
 			AssociationConfigurations: r.expandAssociationConfigurations(cfg.AssociationConfigurations),
 		}
-
 		if !cfg.AnswerGenerationAIPromptId.IsNull() && !cfg.AnswerGenerationAIPromptId.IsUnknown() {
 			value.AnswerGenerationAIPromptId = aws.String(cfg.AnswerGenerationAIPromptId.ValueString())
 		}
@@ -945,18 +959,18 @@ func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentR
 		if !cfg.Locale.IsNull() && !cfg.Locale.IsUnknown() {
 			value.Locale = aws.String(cfg.Locale.ValueString())
 		}
-
 		return &types.AIAgentConfigurationMemberAnswerRecommendationAIAgentConfiguration{
 			Value: value,
 		}
-	}
 
-	if len(data.ManualSearchConfiguration) > 0 {
+	case "MANUAL_SEARCH":
+		if len(data.ManualSearchConfiguration) == 0 {
+			return nil
+		}
 		cfg := data.ManualSearchConfiguration[0]
 		value := types.ManualSearchAIAgentConfiguration{
 			AssociationConfigurations: r.expandAssociationConfigurations(cfg.AssociationConfigurations),
 		}
-
 		if !cfg.AnswerGenerationAIPromptId.IsNull() && !cfg.AnswerGenerationAIPromptId.IsUnknown() {
 			value.AnswerGenerationAIPromptId = aws.String(cfg.AnswerGenerationAIPromptId.ValueString())
 		}
@@ -966,18 +980,18 @@ func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentR
 		if !cfg.Locale.IsNull() && !cfg.Locale.IsUnknown() {
 			value.Locale = aws.String(cfg.Locale.ValueString())
 		}
-
 		return &types.AIAgentConfigurationMemberManualSearchAIAgentConfiguration{
 			Value: value,
 		}
-	}
 
-	if len(data.SelfServiceConfiguration) > 0 {
+	case "SELF_SERVICE":
+		if len(data.SelfServiceConfiguration) == 0 {
+			return nil
+		}
 		cfg := data.SelfServiceConfiguration[0]
 		value := types.SelfServiceAIAgentConfiguration{
 			AssociationConfigurations: r.expandAssociationConfigurations(cfg.AssociationConfigurations),
 		}
-
 		if !cfg.SelfServiceAIGuardrailId.IsNull() && !cfg.SelfServiceAIGuardrailId.IsUnknown() {
 			value.SelfServiceAIGuardrailId = aws.String(cfg.SelfServiceAIGuardrailId.ValueString())
 		}
@@ -987,19 +1001,21 @@ func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentR
 		if !cfg.SelfServicePreProcessingAIPromptId.IsNull() && !cfg.SelfServicePreProcessingAIPromptId.IsUnknown() {
 			value.SelfServicePreProcessingAIPromptId = aws.String(cfg.SelfServicePreProcessingAIPromptId.ValueString())
 		}
-
 		return &types.AIAgentConfigurationMemberSelfServiceAIAgentConfiguration{
 			Value: value,
 		}
-	}
 
-	if len(data.OrchestrationConfiguration) > 0 {
+	case "ORCHESTRATION":
+		if len(data.OrchestrationConfiguration) == 0 {
+			return nil
+		}
 		cfg := data.OrchestrationConfiguration[0]
 		value := types.OrchestrationAIAgentConfiguration{
-			OrchestrationAIPromptId: aws.String(cfg.OrchestrationAIPromptId.ValueString()),
-			ToolConfigurations:      preservedTools,
+			ToolConfigurations: preservedTools,
 		}
-
+		if !cfg.OrchestrationAIPromptId.IsNull() && !cfg.OrchestrationAIPromptId.IsUnknown() && cfg.OrchestrationAIPromptId.ValueString() != "" {
+			value.OrchestrationAIPromptId = aws.String(cfg.OrchestrationAIPromptId.ValueString())
+		}
 		if !cfg.OrchestrationAIGuardrailId.IsNull() && !cfg.OrchestrationAIGuardrailId.IsUnknown() {
 			value.OrchestrationAIGuardrailId = aws.String(cfg.OrchestrationAIGuardrailId.ValueString())
 		}
@@ -1009,7 +1025,6 @@ func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentR
 		if !cfg.Locale.IsNull() && !cfg.Locale.IsUnknown() {
 			value.Locale = aws.String(cfg.Locale.ValueString())
 		}
-
 		return &types.AIAgentConfigurationMemberOrchestrationAIAgentConfiguration{
 			Value: value,
 		}

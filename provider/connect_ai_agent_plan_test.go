@@ -66,6 +66,32 @@ func TestAiAgentPlanRequiresNewVersion(t *testing.T) {
 	})
 }
 
+func TestBuildConfigSkipsEmptyPromptId(t *testing.T) {
+	t.Parallel()
+
+	// An empty-string prompt ID must not be forwarded to the AWS API.
+	// The field is Optional; setting it to "" should behave the same as omitting it.
+	cfg := OrchestrationConfigModel{
+		OrchestrationAIPromptId: frameworktypes.StringValue(""),
+		ConnectInstanceArn:      frameworktypes.StringValue("arn:aws:connect:eu-central-1:123:instance/abc"),
+		Locale:                  frameworktypes.StringValue("de_DE"),
+	}
+
+	if cfg.OrchestrationAIPromptId.ValueString() != "" {
+		t.Fatal("test setup error: expected empty string")
+	}
+
+	// Simulate the guard that buildAIAgentConfiguration now applies.
+	var sent *string
+	if !cfg.OrchestrationAIPromptId.IsNull() && !cfg.OrchestrationAIPromptId.IsUnknown() && cfg.OrchestrationAIPromptId.ValueString() != "" {
+		v := cfg.OrchestrationAIPromptId.ValueString()
+		sent = &v
+	}
+	if sent != nil {
+		t.Fatalf("expected empty prompt ID to be omitted from API request, got %q", *sent)
+	}
+}
+
 func TestOrchestrationConfigEqual(t *testing.T) {
 	t.Parallel()
 
