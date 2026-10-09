@@ -1163,6 +1163,7 @@ func (r *ConnectAIAgentResource) syncTags(
 	if arn == "" {
 		return nil
 	}
+	arn = unqualifiedAIAgentArn(arn)
 
 	old := make(map[string]string)
 	if !oldTags.IsNull() && !oldTags.IsUnknown() {
@@ -1208,6 +1209,14 @@ func (r *ConnectAIAgentResource) syncTags(
 	}
 
 	return nil
+}
+
+func unqualifiedAIAgentArn(arn string) string {
+	slash := strings.LastIndex(arn, "/")
+	if colon := strings.LastIndex(arn, ":"); colon > slash {
+		return arn[:colon]
+	}
+	return arn
 }
 
 // sanitizePreservedTools prepares tools read back from GetAIAgent so they can be passed

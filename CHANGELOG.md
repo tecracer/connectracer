@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased]
+
+## [0.8.0] - 2026-10-09
 ### Added
 - `connectracer_connect_app_integration`: `application_type = "A2A_SERVER"` and an `auth_config` attribute (`auth_type`, `credential_provider_identifier`), for an external AI agent Amazon Connect collaborates with over the A2A protocol. A configuration of type `A2A_SERVER` without `auth_config` is refused at plan time, since AppIntegrations refuses to create one.
 - `connectracer_connect_ai_agent`: `handoff_agent_configuration` and `delegate_agent_configuration` blocks in `orchestration_configuration`, the collaborator agents of an orchestrator (`multiAgentConfigurations`). A collaborator is an AppIntegrations application (`application_id`) or a Connect AI agent (`ai_agent_id`). A handoff sets `audio_streaming_enabled` and `immediate_handoff`, which an external voice agent with its own voice needs. A changed collaborator publishes a new version like any other change of the configuration.
@@ -15,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `connectracer_connect_ai_tool` no longer drops an orchestrator's collaborator agents when it adds or removes a tool. It sends back the configuration it reads, and the SDK before this release did not know `multiAgentConfigurations`, so the field was missing from what it sent.
+- `connectracer_connect_ai_agent` keeps its tags after an update. `UpdateAIAgent` drops them, and tagging them again failed because the agent's ARN carried the version `:$LATEST`. The tag calls now use the ARN without the version, so a plan no longer shows the tags and a new version on every run.
 
 ### Changed
 - `connectracer_connect_security_profile_flow_module` sends the security profile's `AllowedAIAgents` back unchanged when it rewrites the profile, through the read and write it now shares with `connectracer_connect_security_profile_ai_agent`.
