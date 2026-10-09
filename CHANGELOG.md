@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.7.1] - 2026-10-09
+### Fixed
+- `connectracer_connect_ai_tool`: retries the second wording AWS uses while a flow module tool has not propagated yet, "Flow module for MCP tool with ID '...' not found". The retry only knew "not found in MCP tools", so the first apply of a new instance failed right after the flow module and its version were created, and a second apply went through.
+
+
 ## [0.7.0] - 2026-08-28
 ### Added
 - `connectracer_lexv2models_intent`: manages a Lex V2 intent without owning the parts of it that other resources set. `UpdateIntent` replaces the entire intent, so a resource that models a field deletes it whenever the configuration omits it, and the official `aws_lexv2models_intent` models `slot_priority` that way. Paired with a resource that sets the priorities, the two never converge: with priorities present the AWS resource plans them away, with them gone the other plans them back, and whichever runs last wins. Verified in CloudTrail, where the two `UpdateIntent` calls differ only in their user agent. This resource models name, description, parent signature and sample utterances, and reads everything else back before each update to send it again unchanged, so no `lifecycle { ignore_changes = [slot_priority] }` is needed.

@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"errors"
 	"testing"
 
 	frameworktypes "github.com/hashicorp/terraform-plugin-framework/types"
@@ -142,5 +143,42 @@ func TestResolveOmittedStringField(t *testing.T) {
 				t.Errorf("resolveOmittedStringField() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestIsMCPToolNotYetVisible(t *testing.T) {
+	const toolID = "aws_custom_flows__173961ce-6a13-43ad-b869-dd82b2437a23_1"
+
+	cases := map[string]struct {
+		err  string
+		want bool
+	}{
+		"not in the MCP tool list yet": {
+			err:  "ValidationException: Tool " + toolID + " not found in MCP tools",
+			want: true,
+		},
+		"flow module not visible yet": {
+			err:  "ValidationException: Flow module for MCP tool with ID '" + toolID + "' not found",
+			want: true,
+		},
+		"another tool": {
+			err:  "ValidationException: Flow module for MCP tool with ID 'aws_custom_flows__other_1' not found",
+			want: false,
+		},
+		"unrelated error": {
+			err:  "ConflictException: The resource was modified by another request. " + toolID,
+			want: false,
+		},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := isMCPToolNotYetVisible(errors.New(c.err), toolID); got != c.want {
+				t.Errorf("got %v, want %v", got, c.want)
+			}
+		})
+	}
+	if isMCPToolNotYetVisible(errors.New("not found in MCP tools"), "") {
+		t.Error("an empty tool id must never match")
 	}
 }

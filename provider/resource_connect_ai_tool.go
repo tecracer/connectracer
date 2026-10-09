@@ -199,9 +199,7 @@ func (r *ConnectAIToolResource) Create(ctx context.Context, req resource.CreateR
 	// consumers elsewhere in this provider.
 	toolID := data.ToolID.ValueString()
 	err = retryOnEventualConsistency(ctx,
-		func(err error) bool {
-			return toolID != "" && strings.Contains(err.Error(), "not found in MCP tools") && strings.Contains(err.Error(), toolID)
-		},
+		func(err error) bool { return isMCPToolNotYetVisible(err, toolID) },
 		func() error {
 			return r.updateAgentTools(ctx, agent, orchConfig)
 		},
@@ -333,9 +331,7 @@ func (r *ConnectAIToolResource) Update(ctx context.Context, req resource.UpdateR
 
 	toolID := data.ToolID.ValueString()
 	err = retryOnEventualConsistency(ctx,
-		func(err error) bool {
-			return toolID != "" && strings.Contains(err.Error(), "not found in MCP tools") && strings.Contains(err.Error(), toolID)
-		},
+		func(err error) bool { return isMCPToolNotYetVisible(err, toolID) },
 		func() error {
 			return r.updateAgentTools(ctx, agent, orchConfig)
 		},
@@ -608,4 +604,15 @@ func (r *ConnectAIToolResource) populateModelFromTool(ctx context.Context, tc *t
 	}
 
 	return diag.Diagnostics{}
+}
+
+// isMCPToolNotYetVisible reports the errors UpdateAIAgent returns while a tool it was just
+// given has not propagated yet. AWS words it in two ways, depending on how far the tool got.
+func isMCPToolNotYetVisible(err error, toolID string) bool {
+	msg := err.Error()
+	if toolID == "" || !strings.Contains(msg, toolID) {
+		return false
+	}
+	return strings.Contains(msg, "not found in MCP tools") ||
+		(strings.Contains(msg, "Flow module for MCP tool") && strings.Contains(msg, "not found"))
 }
