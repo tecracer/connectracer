@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+### Changed
+- Built with Go 1.27.2. The AWS SDK clients for AppIntegrations, Q in Connect and Connect are updated to the versions that model agent-to-agent collaboration (`A2A_SERVER` applications, `AuthConfig`, handoff configuration on AI agents, `AllowedAIAgents` on security profiles).
+
+### Security
+- `golang.org/x/net` 0.60.0 and `google.golang.org/grpc` 1.83.2, past the vulnerabilities `govulncheck` reported in the versions before.
+
+
 ## [0.7.1] - 2026-10-09
 ### Fixed
 - `connectracer_connect_ai_tool`: retries the second wording AWS uses while a flow module tool has not propagated yet, "Flow module for MCP tool with ID '...' not found". The retry only knew "not found in MCP tools", so the first apply of a new instance failed right after the flow module and its version were created, and a second apply went through.
