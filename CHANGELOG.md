@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased]
+### Added
+- `connectracer_connect_app_integration`: `application_type = "A2A_SERVER"` and an `auth_config` attribute (`auth_type`, `credential_provider_identifier`), for an external AI agent Amazon Connect collaborates with over the A2A protocol. A configuration of type `A2A_SERVER` without `auth_config` is refused at plan time, since AppIntegrations refuses to create one.
+
 ### Changed
 - Built with Go 1.27.2. The AWS SDK clients for AppIntegrations, Q in Connect and Connect are updated to the versions that model agent-to-agent collaboration (`A2A_SERVER` applications, `AuthConfig`, handoff configuration on AI agents, `AllowedAIAgents` on security profiles).
 

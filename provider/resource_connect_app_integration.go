@@ -23,6 +23,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &ConnectAppIntegrationResource{}
 var _ resource.ResourceWithImportState = &ConnectAppIntegrationResource{}
+var _ resource.ResourceWithValidateConfig = &ConnectAppIntegrationResource{}
 
 func NewConnectAppIntegrationResource() resource.Resource {
 	return &ConnectAppIntegrationResource{}
@@ -35,15 +36,22 @@ type ConnectAppIntegrationResource struct {
 
 // ConnectAppIntegrationResourceModel describes the resource data model.
 type ConnectAppIntegrationResourceModel struct {
-	ID              frameworktypes.String `tfsdk:"id"`
-	Arn             frameworktypes.String `tfsdk:"arn"`
-	Name            frameworktypes.String `tfsdk:"name"`
-	Namespace       frameworktypes.String `tfsdk:"namespace"`
-	Description     frameworktypes.String `tfsdk:"description"`
-	AccessUrl       frameworktypes.String `tfsdk:"access_url"`
-	ApplicationType frameworktypes.String `tfsdk:"application_type"`
-	Permissions     frameworktypes.List   `tfsdk:"permissions"`
-	Tags            frameworktypes.Map    `tfsdk:"tags"`
+	ID              frameworktypes.String          `tfsdk:"id"`
+	Arn             frameworktypes.String          `tfsdk:"arn"`
+	Name            frameworktypes.String          `tfsdk:"name"`
+	Namespace       frameworktypes.String          `tfsdk:"namespace"`
+	Description     frameworktypes.String          `tfsdk:"description"`
+	AccessUrl       frameworktypes.String          `tfsdk:"access_url"`
+	ApplicationType frameworktypes.String          `tfsdk:"application_type"`
+	AuthConfig      *AppIntegrationAuthConfigModel `tfsdk:"auth_config"`
+	Permissions     frameworktypes.List            `tfsdk:"permissions"`
+	Tags            frameworktypes.Map             `tfsdk:"tags"`
+}
+
+// AppIntegrationAuthConfigModel is how Connect authenticates to an A2A_SERVER application.
+type AppIntegrationAuthConfigModel struct {
+	AuthType                     frameworktypes.String `tfsdk:"auth_type"`
+	CredentialProviderIdentifier frameworktypes.String `tfsdk:"credential_provider_identifier"`
 }
 
 func (r *ConnectAppIntegrationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -53,7 +61,8 @@ func (r *ConnectAppIntegrationResource) Metadata(ctx context.Context, req resour
 func (r *ConnectAppIntegrationResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages an AWS AppIntegrations Application resource.\n\n" +
-			"This creates an Application (e.g., an MCP Server integration) that can then be associated " +
+			"This creates an Application (e.g., an MCP Server integration, or an external AI agent Connect " +
+			"collaborates with over the A2A protocol) that can then be associated " +
 			"with an Amazon Connect instance using the `connectracer_connect_integration_association` resource.",
 
 		Attributes: map[string]schema.Attribute{
@@ -87,16 +96,31 @@ func (r *ConnectAppIntegrationResource) Schema(ctx context.Context, req resource
 				Optional:            true,
 			},
 			"access_url": schema.StringAttribute{
-				MarkdownDescription: "The URL to access the application (the external URL source).",
+				MarkdownDescription: "The URL to access the application (the external URL source). For `A2A_SERVER`, the agent's public `wss://` or `https://` endpoint.",
 				Required:            true,
 			},
 			"application_type": schema.StringAttribute{
-				MarkdownDescription: "The type of the application. Valid values: `STANDARD`, `SERVICE`, `MCP_SERVER`.",
+				MarkdownDescription: "The type of the application. Valid values: `STANDARD`, `SERVICE`, `MCP_SERVER`, `A2A_SERVER`. `A2A_SERVER` requires `auth_config`.",
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"auth_config": schema.SingleNestedAttribute{
+				MarkdownDescription: "How Amazon Connect authenticates to the application. Required for `A2A_SERVER`.",
+				Optional:            true,
+				Attributes: map[string]schema.Attribute{
+					"auth_type": schema.StringAttribute{
+						MarkdownDescription: "The authentication type. Valid value: `API_KEY`.",
+						Required:            true,
+					},
+					"credential_provider_identifier": schema.StringAttribute{
+						MarkdownDescription: "The ARN of the Secrets Manager secret holding the credential. Connect presents its value as the bearer token, " +
+							"so the secret has to be encrypted with a customer managed KMS key that Connect may use.",
+						Required: true,
+					},
 				},
 			},
 			"permissions": schema.ListAttribute{
@@ -155,6 +179,8 @@ func (r *ConnectAppIntegrationResource) Create(ctx context.Context, req resource
 	if !data.ApplicationType.IsNull() && !data.ApplicationType.IsUnknown() {
 		input.ApplicationType = types.ApplicationType(data.ApplicationType.ValueString())
 	}
+
+	input.AuthConfig = expandAppIntegrationAuthConfig(data.AuthConfig)
 
 	// Permissions
 	if !data.Permissions.IsNull() && !data.Permissions.IsUnknown() {
@@ -256,6 +282,8 @@ func (r *ConnectAppIntegrationResource) Update(ctx context.Context, req resource
 
 	// Always send name (it's required for update semantics)
 	updateInput.Name = aws.String(data.Name.ValueString())
+
+	updateInput.AuthConfig = expandAppIntegrationAuthConfig(data.AuthConfig)
 
 	if !data.Description.IsNull() && !data.Description.IsUnknown() {
 		updateInput.Description = aws.String(data.Description.ValueString())
@@ -431,6 +459,8 @@ func (r *ConnectAppIntegrationResource) readAndPopulateModel(ctx context.Context
 		data.ApplicationType = frameworktypes.StringNull()
 	}
 
+	data.AuthConfig = flattenAppIntegrationAuthConfig(output.AuthConfig)
+
 	// Access URL from ApplicationSourceConfig
 	if output.ApplicationSourceConfig != nil && output.ApplicationSourceConfig.ExternalUrlConfig != nil {
 		data.AccessUrl = frameworktypes.StringPointerValue(output.ApplicationSourceConfig.ExternalUrlConfig.AccessUrl)
@@ -462,4 +492,40 @@ func (r *ConnectAppIntegrationResource) readAndPopulateModel(ctx context.Context
 	}
 
 	return diags
+}
+
+func (r *ConnectAppIntegrationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data ConnectAppIntegrationResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.ApplicationType.ValueString() == string(types.ApplicationTypeA2aServer) && data.AuthConfig == nil {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("auth_config"),
+			"Missing auth_config",
+			"An application of type A2A_SERVER needs auth_config. AppIntegrations refuses to create it without one.",
+		)
+	}
+}
+
+func expandAppIntegrationAuthConfig(model *AppIntegrationAuthConfigModel) *types.AuthConfig {
+	if model == nil {
+		return nil
+	}
+	return &types.AuthConfig{
+		AuthType:                     types.AuthType(model.AuthType.ValueString()),
+		CredentialProviderIdentifier: aws.String(model.CredentialProviderIdentifier.ValueString()),
+	}
+}
+
+func flattenAppIntegrationAuthConfig(config *types.AuthConfig) *AppIntegrationAuthConfigModel {
+	if config == nil {
+		return nil
+	}
+	return &AppIntegrationAuthConfigModel{
+		AuthType:                     frameworktypes.StringValue(string(config.AuthType)),
+		CredentialProviderIdentifier: frameworktypes.StringPointerValue(config.CredentialProviderIdentifier),
+	}
 }

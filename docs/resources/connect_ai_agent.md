@@ -223,12 +223,15 @@ Optional:
 <a id="nestedblock--orchestration_configuration"></a>
 ### Nested Schema for `orchestration_configuration`
 
+Required:
+
+- `connect_instance_arn` (String) The Amazon Connect instance ARN. Required for ORCHESTRATION agents.
+
 Optional:
 
-- `connect_instance_arn` (String) The Amazon Connect instance ARN
 - `locale` (String) The locale for the configuration
 - `orchestration_ai_guardrail_id` (String) The AI Guardrail ID for orchestration
-- `orchestration_ai_prompt_id` (String) The AI Prompt ID for orchestration. When omitted or empty the agent uses the default system prompt.
+- `orchestration_ai_prompt_id` (String) The AI Prompt ID for orchestration. When omitted the agent uses the default system prompt.
 
 
 <a id="nestedblock--self_service_configuration"></a>
