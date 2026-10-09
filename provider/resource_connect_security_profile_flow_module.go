@@ -129,7 +129,7 @@ func (r *ConnectSecurityProfileFlowModuleResource) Create(ctx context.Context, r
 		return
 	}
 
-	sp, err := r.getSecurityProfileState(ctx, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString())
+	sp, err := readSecurityProfileState(ctx, r.client, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Security Profile", err.Error())
 		return
@@ -165,7 +165,7 @@ func (r *ConnectSecurityProfileFlowModuleResource) Create(ctx context.Context, r
 			return strings.Contains(err.Error(), "InvalidParameterException") && strings.Contains(err.Error(), flowModuleID)
 		},
 		func() error {
-			return r.updateSecurityProfile(ctx, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString(), sp)
+			return writeSecurityProfileState(ctx, r.client, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString(), sp)
 		},
 	)
 	if err != nil {
@@ -189,7 +189,7 @@ func (r *ConnectSecurityProfileFlowModuleResource) Read(ctx context.Context, req
 		return
 	}
 
-	allowed, err := r.listAllowedFlowModules(ctx, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString())
+	allowed, err := listAllowedFlowModules(ctx, r.client, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "ResourceNotFoundException") {
 			resp.State.RemoveResource(ctx)
@@ -217,7 +217,7 @@ func (r *ConnectSecurityProfileFlowModuleResource) Update(ctx context.Context, r
 		return
 	}
 
-	sp, err := r.getSecurityProfileState(ctx, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString())
+	sp, err := readSecurityProfileState(ctx, r.client, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Security Profile", err.Error())
 		return
@@ -239,7 +239,7 @@ func (r *ConnectSecurityProfileFlowModuleResource) Update(ctx context.Context, r
 		})
 	}
 
-	if err := r.updateSecurityProfile(ctx, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString(), sp); err != nil {
+	if err := writeSecurityProfileState(ctx, r.client, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString(), sp); err != nil {
 		resp.Diagnostics.AddError("Error updating Flow Module access", err.Error())
 		return
 	}
@@ -258,7 +258,7 @@ func (r *ConnectSecurityProfileFlowModuleResource) Delete(ctx context.Context, r
 		return
 	}
 
-	sp, err := r.getSecurityProfileState(ctx, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString())
+	sp, err := readSecurityProfileState(ctx, r.client, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "ResourceNotFoundException") {
 			// Security profile already gone; nothing to clean up.
@@ -276,7 +276,7 @@ func (r *ConnectSecurityProfileFlowModuleResource) Delete(ctx context.Context, r
 	}
 	sp.allowedFlowModules = filtered
 
-	if err := r.updateSecurityProfile(ctx, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString(), sp); err != nil {
+	if err := writeSecurityProfileState(ctx, r.client, data.InstanceID.ValueString(), data.SecurityProfileID.ValueString(), sp); err != nil {
 		resp.Diagnostics.AddError("Error revoking Flow Module access", err.Error())
 		return
 	}
@@ -317,115 +317,6 @@ func (r *ConnectSecurityProfileFlowModuleResource) findFlowModule(modules []type
 		if aws.ToString(modules[i].FlowModuleId) == id {
 			return &modules[i]
 		}
-	}
-	return nil
-}
-
-// listAllowedFlowModules returns the full, paginated AllowedFlowModules list for a security profile.
-func (r *ConnectSecurityProfileFlowModuleResource) listAllowedFlowModules(ctx context.Context, instanceID, securityProfileID string) ([]types.FlowModule, error) {
-	var out []types.FlowModule
-	paginator := connect.NewListSecurityProfileFlowModulesPaginator(r.client, &connect.ListSecurityProfileFlowModulesInput{
-		InstanceId:        aws.String(instanceID),
-		SecurityProfileId: aws.String(securityProfileID),
-	})
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("listing security profile flow modules: %w", err)
-		}
-		out = append(out, page.AllowedFlowModules...)
-	}
-	return out, nil
-}
-
-// securityProfileState bundles every field UpdateSecurityProfile can set, so it can be
-// re-supplied unchanged except for the one AllowedFlowModules entry this resource owns.
-type securityProfileState struct {
-	description                          *string
-	allowedAccessControlHierarchyGroupID *string
-	allowedAccessControlTags             map[string]string
-	granularAccessControlConfiguration   *types.GranularAccessControlConfiguration
-	hierarchyRestrictedResources         []string
-	permissions                          []string
-	applications                         []types.Application
-	allowedFlowModules                   []types.FlowModule
-}
-
-// getSecurityProfileState fetches every field needed to safely round-trip an UpdateSecurityProfile
-// call without clobbering fields owned by other resources (e.g. aws_connect_security_profile).
-func (r *ConnectSecurityProfileFlowModuleResource) getSecurityProfileState(ctx context.Context, instanceID, securityProfileID string) (*securityProfileState, error) {
-	described, err := r.client.DescribeSecurityProfile(ctx, &connect.DescribeSecurityProfileInput{
-		InstanceId:        aws.String(instanceID),
-		SecurityProfileId: aws.String(securityProfileID),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("describing security profile %s: %w", securityProfileID, err)
-	}
-	if described.SecurityProfile == nil {
-		return nil, fmt.Errorf("DescribeSecurityProfile returned empty response for %s", securityProfileID)
-	}
-	sp := described.SecurityProfile
-
-	state := &securityProfileState{
-		description:                          sp.Description,
-		allowedAccessControlHierarchyGroupID: sp.AllowedAccessControlHierarchyGroupId,
-		allowedAccessControlTags:             sp.AllowedAccessControlTags,
-		granularAccessControlConfiguration:   sp.GranularAccessControlConfiguration,
-		hierarchyRestrictedResources:         sp.HierarchyRestrictedResources,
-	}
-
-	permPaginator := connect.NewListSecurityProfilePermissionsPaginator(r.client, &connect.ListSecurityProfilePermissionsInput{
-		InstanceId:        aws.String(instanceID),
-		SecurityProfileId: aws.String(securityProfileID),
-	})
-	for permPaginator.HasMorePages() {
-		page, err := permPaginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("listing security profile permissions: %w", err)
-		}
-		state.permissions = append(state.permissions, page.Permissions...)
-	}
-
-	appPaginator := connect.NewListSecurityProfileApplicationsPaginator(r.client, &connect.ListSecurityProfileApplicationsInput{
-		InstanceId:        aws.String(instanceID),
-		SecurityProfileId: aws.String(securityProfileID),
-	})
-	for appPaginator.HasMorePages() {
-		page, err := appPaginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("listing security profile applications: %w", err)
-		}
-		state.applications = append(state.applications, page.Applications...)
-	}
-
-	allowedFlowModules, err := r.listAllowedFlowModules(ctx, instanceID, securityProfileID)
-	if err != nil {
-		return nil, err
-	}
-	state.allowedFlowModules = allowedFlowModules
-
-	return state, nil
-}
-
-// updateSecurityProfile calls UpdateSecurityProfile, re-supplying every field on sp so that
-// only the caller's intended AllowedFlowModules change takes effect.
-func (r *ConnectSecurityProfileFlowModuleResource) updateSecurityProfile(ctx context.Context, instanceID, securityProfileID string, sp *securityProfileState) error {
-	input := &connect.UpdateSecurityProfileInput{
-		InstanceId:                           aws.String(instanceID),
-		SecurityProfileId:                    aws.String(securityProfileID),
-		Description:                          sp.description,
-		AllowedAccessControlHierarchyGroupId: sp.allowedAccessControlHierarchyGroupID,
-		AllowedAccessControlTags:             sp.allowedAccessControlTags,
-		GranularAccessControlConfiguration:   sp.granularAccessControlConfiguration,
-		HierarchyRestrictedResources:         sp.hierarchyRestrictedResources,
-		Permissions:                          sp.permissions,
-		Applications:                         sp.applications,
-		AllowedFlowModules:                   sp.allowedFlowModules,
-	}
-
-	_, err := r.client.UpdateSecurityProfile(ctx, input)
-	if err != nil {
-		return fmt.Errorf("UpdateSecurityProfile failed: %w", err)
 	}
 	return nil
 }
