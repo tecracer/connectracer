@@ -12,15 +12,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/qconnect"
 	"github.com/aws/aws-sdk-go-v2/service/qconnect/types"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	frameworktypes "github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -89,6 +90,26 @@ type OrchestrationConfigModel struct {
 	OrchestrationAIGuardrailId frameworktypes.String `tfsdk:"orchestration_ai_guardrail_id"`
 	ConnectInstanceArn         frameworktypes.String `tfsdk:"connect_instance_arn"`
 	Locale                     frameworktypes.String `tfsdk:"locale"`
+	Handoffs                   []AgentHandoffModel   `tfsdk:"handoff_agent_configuration"`
+	Delegates                  []AgentDelegateModel  `tfsdk:"delegate_agent_configuration"`
+}
+
+// AgentHandoffModel is a collaborator agent the orchestrator hands the conversation over to.
+type AgentHandoffModel struct {
+	ApplicationID         frameworktypes.String   `tfsdk:"application_id"`
+	AIAgentID             frameworktypes.String   `tfsdk:"ai_agent_id"`
+	Instruction           frameworktypes.String   `tfsdk:"instruction"`
+	Examples              []frameworktypes.String `tfsdk:"examples"`
+	AudioStreamingEnabled frameworktypes.Bool     `tfsdk:"audio_streaming_enabled"`
+	ImmediateHandoff      frameworktypes.Bool     `tfsdk:"immediate_handoff"`
+}
+
+// AgentDelegateModel is a collaborator agent the orchestrator asks for a result while it keeps the conversation.
+type AgentDelegateModel struct {
+	ApplicationID frameworktypes.String   `tfsdk:"application_id"`
+	AIAgentID     frameworktypes.String   `tfsdk:"ai_agent_id"`
+	Instruction   frameworktypes.String   `tfsdk:"instruction"`
+	Examples      []frameworktypes.String `tfsdk:"examples"`
 }
 
 type AssociationConfigModel struct {
@@ -403,10 +424,69 @@ func (r *ConnectAIAgentResource) Schema(ctx context.Context, req resource.Schema
 							Optional:            true,
 						},
 					},
+					Blocks: map[string]schema.Block{
+						"handoff_agent_configuration": schema.ListNestedBlock{
+							MarkdownDescription: "A collaborator agent the orchestrator hands the conversation over to, for example an external " +
+								"agent registered as an `A2A_SERVER` application. The application has to be allowed on a security profile " +
+								"attached to this agent.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: collaboratorAttributes(map[string]schema.Attribute{
+									"audio_streaming_enabled": schema.BoolAttribute{
+										MarkdownDescription: "Stream the caller's audio to the collaborator and play its audio back. Voice only, and it needs a speech-to-speech Lex bot.",
+										Optional:            true,
+										Computed:            true,
+										Default:             booldefault.StaticBool(false),
+									},
+									"immediate_handoff": schema.BoolAttribute{
+										MarkdownDescription: "Hand over on the first turn without orchestration reasoning. At most one handoff may set it. Audio handoffs require it.",
+										Optional:            true,
+										Computed:            true,
+										Default:             booldefault.StaticBool(false),
+									},
+								}),
+							},
+						},
+						"delegate_agent_configuration": schema.ListNestedBlock{
+							MarkdownDescription: "A collaborator agent the orchestrator asks for a result in the background while it keeps the conversation.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: collaboratorAttributes(nil),
+							},
+						},
+					},
 				},
 			},
 		},
 	}
+}
+
+// collaboratorAttributes are the attributes every collaborator agent has, plus the ones its kind adds.
+func collaboratorAttributes(extra map[string]schema.Attribute) map[string]schema.Attribute {
+	attributes := map[string]schema.Attribute{
+		"application_id": schema.StringAttribute{
+			MarkdownDescription: "The ID of the AppIntegrations application of the external collaborator. Exactly one of `application_id` and `ai_agent_id`.",
+			Optional:            true,
+			Validators: []validator.String{
+				stringvalidator.ExactlyOneOf(path.MatchRelative().AtParent().AtName("ai_agent_id")),
+			},
+		},
+		"ai_agent_id": schema.StringAttribute{
+			MarkdownDescription: "The ID of a Connect AI agent as the collaborator. Exactly one of `application_id` and `ai_agent_id`.",
+			Optional:            true,
+		},
+		"instruction": schema.StringAttribute{
+			MarkdownDescription: "When and how the orchestrator engages this collaborator.",
+			Optional:            true,
+		},
+		"examples": schema.ListAttribute{
+			MarkdownDescription: "Example interactions that show when the orchestrator engages this collaborator.",
+			Optional:            true,
+			ElementType:         frameworktypes.StringType,
+		},
+	}
+	for name, attribute := range extra {
+		attributes[name] = attribute
+	}
+	return attributes
 }
 
 func (r *ConnectAIAgentResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -854,6 +934,7 @@ func (r *ConnectAIAgentResource) populateConfigurationFromAPI(config types.AIAge
 			ConnectInstanceArn:         frameworktypes.StringPointerValue(c.Value.ConnectInstanceArn),
 			Locale:                     frameworktypes.StringPointerValue(c.Value.Locale),
 		}
+		model.Handoffs, model.Delegates = flattenMultiAgentConfigurations(c.Value.MultiAgentConfigurations)
 		data.OrchestrationConfiguration = []OrchestrationConfigModel{model}
 	}
 }
@@ -1025,6 +1106,7 @@ func (r *ConnectAIAgentResource) buildAIAgentConfiguration(data *ConnectAIAgentR
 		if !cfg.Locale.IsNull() && !cfg.Locale.IsUnknown() {
 			value.Locale = aws.String(cfg.Locale.ValueString())
 		}
+		value.MultiAgentConfigurations = expandMultiAgentConfigurations(cfg.Handoffs, cfg.Delegates)
 		return &types.AIAgentConfigurationMemberOrchestrationAIAgentConfiguration{
 			Value: value,
 		}
@@ -1081,6 +1163,7 @@ func (r *ConnectAIAgentResource) syncTags(
 	if arn == "" {
 		return nil
 	}
+	arn = unqualifiedAIAgentArn(arn)
 
 	old := make(map[string]string)
 	if !oldTags.IsNull() && !oldTags.IsUnknown() {
@@ -1126,6 +1209,14 @@ func (r *ConnectAIAgentResource) syncTags(
 	}
 
 	return nil
+}
+
+func unqualifiedAIAgentArn(arn string) string {
+	slash := strings.LastIndex(arn, "/")
+	if colon := strings.LastIndex(arn, ":"); colon > slash {
+		return arn[:colon]
+	}
+	return arn
 }
 
 // sanitizePreservedTools prepares tools read back from GetAIAgent so they can be passed
@@ -1202,7 +1293,9 @@ func orchestrationConfigEqual(plan, state []OrchestrationConfigModel) bool {
 	return p.OrchestrationAIPromptId.Equal(s.OrchestrationAIPromptId) &&
 		p.OrchestrationAIGuardrailId.Equal(s.OrchestrationAIGuardrailId) &&
 		p.ConnectInstanceArn.Equal(s.ConnectInstanceArn) &&
-		p.Locale.Equal(s.Locale)
+		p.Locale.Equal(s.Locale) &&
+		handoffsEqual(p.Handoffs, s.Handoffs) &&
+		delegatesEqual(p.Delegates, s.Delegates)
 }
 
 func answerRecommendationConfigEqual(plan, state []AnswerRecommendationConfigModel) bool {

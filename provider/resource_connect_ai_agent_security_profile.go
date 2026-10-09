@@ -40,6 +40,7 @@ type ConnectAIAgentSecurityProfileResourceModel struct {
 	InstanceID        frameworktypes.String `tfsdk:"instance_id"`
 	AIAgentArn        frameworktypes.String `tfsdk:"ai_agent_arn"`
 	SecurityProfileID frameworktypes.String `tfsdk:"security_profile_id"`
+	AIAgentVersion    frameworktypes.Int64  `tfsdk:"ai_agent_version"`
 }
 
 func (r *ConnectAIAgentSecurityProfileResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -55,7 +56,10 @@ func (r *ConnectAIAgentSecurityProfileResource) Schema(_ context.Context, _ reso
 			"even if the flow module or MCP tool itself is otherwise fully configured.\n\n" +
 			"`RETURN_TO_CONTROL` tools (`connectracer_connect_ai_tool` with `tool_type = \"RETURN_TO_CONTROL\"`, e.g. " +
 			"`Complete`/`Escalate`) are not governed this way — they don't access any protected resource, so they work " +
-			"without any security profile association.",
+			"without any security profile association.\n\n" +
+			"An agent that hands over to an external collaborator (A2A) also needs the association on its versions. " +
+			"Set `ai_agent_version` to the agent's published version and the resource associates `:$LATEST`, `:$SAVED` " +
+			"and `:<version>` as well, and moves the numbered association along when the version changes.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -85,6 +89,12 @@ func (r *ConnectAIAgentSecurityProfileResource) Schema(_ context.Context, _ reso
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"ai_agent_version": schema.Int64Attribute{
+				MarkdownDescription: "The published version of the AI Agent, usually `connectracer_connect_ai_agent.<name>.version_number`. " +
+					"When set, the security profile is associated with `:$LATEST`, `:$SAVED` and `:<version>` of the agent as well. " +
+					"`:$SAVED` is skipped while the agent has no saved state.",
+				Optional: true,
 			},
 		},
 	}
@@ -140,29 +150,15 @@ func (r *ConnectAIAgentSecurityProfileResource) Create(ctx context.Context, req 
 		"security_profile_id": data.SecurityProfileID.ValueString(),
 	})
 
-	associateInput := &connect.AssociateSecurityProfilesInput{
-		EntityArn:  aws.String(data.AIAgentArn.ValueString()),
-		EntityType: types.EntityTypeAiAgent,
-		InstanceId: aws.String(data.InstanceID.ValueString()),
-		SecurityProfiles: []types.SecurityProfileItem{
-			{Id: aws.String(data.SecurityProfileID.ValueString())},
-		},
-	}
-
-	err = retryOnEventualConsistency(ctx,
-		func(err error) bool { return strings.Contains(err.Error(), "ResourceNotFoundException") },
-		func() error {
-			_, err := r.client.AssociateSecurityProfiles(ctx, associateInput)
-			return err
-		},
-	)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error associating Security Profile with AI Agent",
-			fmt.Sprintf("Unable to associate security profile %s with AI agent %s: %s",
-				data.SecurityProfileID.ValueString(), data.AIAgentArn.ValueString(), err),
-		)
-		return
+	for _, entityArn := range associatedAIAgentArns(data.AIAgentArn.ValueString(), data.AIAgentVersion) {
+		if err := r.associate(ctx, data.InstanceID.ValueString(), entityArn, data.SecurityProfileID.ValueString()); err != nil {
+			resp.Diagnostics.AddError(
+				"Error associating Security Profile with AI Agent",
+				fmt.Sprintf("Unable to associate security profile %s with AI agent %s: %s",
+					data.SecurityProfileID.ValueString(), entityArn, err),
+			)
+			return
+		}
 	}
 
 	data.ID = frameworktypes.StringValue(r.composeID(data.InstanceID.ValueString(), data.AIAgentArn.ValueString(), data.SecurityProfileID.ValueString()))
@@ -201,17 +197,43 @@ func (r *ConnectAIAgentSecurityProfileResource) Read(ctx context.Context, req re
 		return
 	}
 
+	// A version association that went missing reads as no version, so the next plan puts it back.
+	for _, entityArn := range versionArnsToCheck(data.AIAgentArn.ValueString(), data.AIAgentVersion) {
+		profiles, err := r.listAssociatedSecurityProfiles(ctx, data.InstanceID.ValueString(), entityArn)
+		if err != nil || !containsSecurityProfile(profiles, data.SecurityProfileID.ValueString()) {
+			data.AIAgentVersion = frameworktypes.Int64Null()
+			break
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// Update only ever sees ai_agent_version change: every other attribute replaces the resource.
 func (r *ConnectAIAgentSecurityProfileResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// instance_id, ai_agent_arn, and security_profile_id all have RequiresReplace, so
-	// Update should never be called. If it is called unexpectedly, just read the plan into state.
-	var data ConnectAIAgentSecurityProfileResourceModel
+	var data, state ConnectAIAgentSecurityProfileResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	planned := associatedAIAgentArns(data.AIAgentArn.ValueString(), data.AIAgentVersion)
+	previous := associatedAIAgentArns(state.AIAgentArn.ValueString(), state.AIAgentVersion)
+
+	for _, entityArn := range arnsMissingFrom(previous, planned) {
+		if err := r.disassociate(ctx, data.InstanceID.ValueString(), entityArn, data.SecurityProfileID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error disassociating Security Profile from AI Agent version", err.Error())
+			return
+		}
+	}
+	for _, entityArn := range planned {
+		if err := r.associate(ctx, data.InstanceID.ValueString(), entityArn, data.SecurityProfileID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error associating Security Profile with AI Agent version", err.Error())
+			return
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -227,24 +249,15 @@ func (r *ConnectAIAgentSecurityProfileResource) Delete(ctx context.Context, req 
 		"security_profile_id": data.SecurityProfileID.ValueString(),
 	})
 
-	_, err := r.client.DisassociateSecurityProfiles(ctx, &connect.DisassociateSecurityProfilesInput{
-		EntityArn:  aws.String(data.AIAgentArn.ValueString()),
-		EntityType: types.EntityTypeAiAgent,
-		InstanceId: aws.String(data.InstanceID.ValueString()),
-		SecurityProfiles: []types.SecurityProfileItem{
-			{Id: aws.String(data.SecurityProfileID.ValueString())},
-		},
-	})
-	if err != nil {
-		if strings.Contains(err.Error(), "ResourceNotFoundException") {
+	for _, entityArn := range associatedAIAgentArns(data.AIAgentArn.ValueString(), data.AIAgentVersion) {
+		if err := r.disassociate(ctx, data.InstanceID.ValueString(), entityArn, data.SecurityProfileID.ValueString()); err != nil {
+			resp.Diagnostics.AddError(
+				"Error disassociating Security Profile from AI Agent",
+				fmt.Sprintf("Unable to disassociate security profile %s from AI agent %s: %s",
+					data.SecurityProfileID.ValueString(), entityArn, err),
+			)
 			return
 		}
-		resp.Diagnostics.AddError(
-			"Error disassociating Security Profile from AI Agent",
-			fmt.Sprintf("Unable to disassociate security profile %s from AI agent %s: %s",
-				data.SecurityProfileID.ValueString(), data.AIAgentArn.ValueString(), err),
-		)
-		return
 	}
 
 	tflog.Trace(ctx, "Disassociated Security Profile from AI Agent")
@@ -313,4 +326,95 @@ func parseAIAgentSecurityProfileImportID(id string) (instanceID, aiAgentArn, sec
 	}
 
 	return instanceID, aiAgentArn, securityProfileID, nil
+}
+
+// associatedAIAgentArns is every ARN of the agent the security profile is associated with:
+// the agent itself, and with a version also :$LATEST, :$SAVED and :<version>.
+func associatedAIAgentArns(agentArn string, version frameworktypes.Int64) []string {
+	arns := []string{agentArn}
+	if version.IsNull() || version.IsUnknown() {
+		return arns
+	}
+	return append(arns,
+		agentArn+":$LATEST",
+		agentArn+savedQualifier,
+		fmt.Sprintf("%s:%d", agentArn, version.ValueInt64()),
+	)
+}
+
+const savedQualifier = ":$SAVED"
+
+// versionArnsToCheck leaves out :$SAVED, which exists only while the agent has a saved state.
+func versionArnsToCheck(agentArn string, version frameworktypes.Int64) []string {
+	var arns []string
+	for _, arn := range associatedAIAgentArns(agentArn, version)[1:] {
+		if !strings.HasSuffix(arn, savedQualifier) {
+			arns = append(arns, arn)
+		}
+	}
+	return arns
+}
+
+func arnsMissingFrom(previous, planned []string) []string {
+	kept := make(map[string]bool, len(planned))
+	for _, arn := range planned {
+		kept[arn] = true
+	}
+	var gone []string
+	for _, arn := range previous {
+		if !kept[arn] {
+			gone = append(gone, arn)
+		}
+	}
+	return gone
+}
+
+func containsSecurityProfile(profiles []types.SecurityProfileItem, securityProfileID string) bool {
+	for _, profile := range profiles {
+		if aws.ToString(profile.Id) == securityProfileID {
+			return true
+		}
+	}
+	return false
+}
+
+// associate tolerates an association that already exists, and a :$SAVED the agent does not have.
+func (r *ConnectAIAgentSecurityProfileResource) associate(ctx context.Context, instanceID, entityArn, securityProfileID string) error {
+	input := &connect.AssociateSecurityProfilesInput{
+		EntityArn:        aws.String(entityArn),
+		EntityType:       types.EntityTypeAiAgent,
+		InstanceId:       aws.String(instanceID),
+		SecurityProfiles: []types.SecurityProfileItem{{Id: aws.String(securityProfileID)}},
+	}
+	saved := strings.HasSuffix(entityArn, savedQualifier)
+
+	err := retryOnEventualConsistency(ctx,
+		func(err error) bool { return !saved && strings.Contains(err.Error(), "ResourceNotFoundException") },
+		func() error {
+			_, err := r.client.AssociateSecurityProfiles(ctx, input)
+			return err
+		},
+	)
+	if err == nil || isAlreadyAssociated(err) || (saved && strings.Contains(err.Error(), "ResourceNotFoundException")) {
+		return nil
+	}
+	return err
+}
+
+func (r *ConnectAIAgentSecurityProfileResource) disassociate(ctx context.Context, instanceID, entityArn, securityProfileID string) error {
+	_, err := r.client.DisassociateSecurityProfiles(ctx, &connect.DisassociateSecurityProfilesInput{
+		EntityArn:        aws.String(entityArn),
+		EntityType:       types.EntityTypeAiAgent,
+		InstanceId:       aws.String(instanceID),
+		SecurityProfiles: []types.SecurityProfileItem{{Id: aws.String(securityProfileID)}},
+	})
+	if err != nil && !strings.Contains(err.Error(), "ResourceNotFoundException") {
+		return err
+	}
+	return nil
+}
+
+func isAlreadyAssociated(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "already") || strings.Contains(message, "duplicate")
 }

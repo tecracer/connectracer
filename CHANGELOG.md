@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+## [0.8.0] - 2026-10-09
+### Added
+- `connectracer_connect_app_integration`: `application_type = "A2A_SERVER"` and an `auth_config` attribute (`auth_type`, `credential_provider_identifier`), for an external AI agent Amazon Connect collaborates with over the A2A protocol. A configuration of type `A2A_SERVER` without `auth_config` is refused at plan time, since AppIntegrations refuses to create one.
+- `connectracer_connect_ai_agent`: `handoff_agent_configuration` and `delegate_agent_configuration` blocks in `orchestration_configuration`, the collaborator agents of an orchestrator (`multiAgentConfigurations`). A collaborator is an AppIntegrations application (`application_id`) or a Connect AI agent (`ai_agent_id`). A handoff sets `audio_streaming_enabled` and `immediate_handoff`, which an external voice agent with its own voice needs. A changed collaborator publishes a new version like any other change of the configuration.
+- `connectracer_connect_security_profile_ai_agent`: allows an external AI agent on a security profile (`AllowedAIAgents`), the entry an orchestrator needs before it may hand over to an `A2A_SERVER` application. It owns one entry and re-supplies the rest of the security profile unchanged, like `connectracer_connect_security_profile_flow_module`.
+- `connectracer_connect_ai_agent_security_profile`: optional `ai_agent_version`. When set, the security profile is associated with `:$LATEST`, `:$SAVED` and `:<version>` of the agent as well, which the AWS guide asks for before an agent hands over to an external collaborator. A new version moves the numbered association along in place. Without it the resource behaves as before.
+
+### Fixed
+- `connectracer_connect_ai_tool` no longer drops an orchestrator's collaborator agents when it adds or removes a tool. It sends back the configuration it reads, and the SDK before this release did not know `multiAgentConfigurations`, so the field was missing from what it sent.
+- `connectracer_connect_ai_agent` keeps its tags after an update. `UpdateAIAgent` drops them, and tagging them again failed because the agent's ARN carried the version `:$LATEST`. The tag calls now use the ARN without the version, so a plan no longer shows the tags and a new version on every run.
+
+### Changed
+- `connectracer_connect_security_profile_flow_module` sends the security profile's `AllowedAIAgents` back unchanged when it rewrites the profile, through the read and write it now shares with `connectracer_connect_security_profile_ai_agent`.
+- Built with Go 1.27.2. The AWS SDK clients for AppIntegrations, Q in Connect and Connect are updated to the versions that model agent-to-agent collaboration (`A2A_SERVER` applications, `AuthConfig`, handoff configuration on AI agents, `AllowedAIAgents` on security profiles).
+
+### Security
+- `golang.org/x/net` 0.60.0 and `google.golang.org/grpc` 1.83.2, past the vulnerabilities `govulncheck` reported in the versions before.
+
+
 ## [0.7.1] - 2026-10-09
 ### Fixed
 - `connectracer_connect_ai_tool`: retries the second wording AWS uses while a flow module tool has not propagated yet, "Flow module for MCP tool with ID '...' not found". The retry only knew "not found in MCP tools", so the first apply of a new instance failed right after the flow module and its version were created, and a second apply went through.

@@ -3,7 +3,12 @@
 
 package provider
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	frameworktypes "github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 func TestParseAIAgentSecurityProfileImportID(t *testing.T) {
 	t.Parallel()
@@ -68,5 +73,55 @@ func TestParseAIAgentSecurityProfileImportID(t *testing.T) {
 				t.Errorf("securityProfileID = %q, want %q", securityProfileID, tc.wantSecurityProfileID)
 			}
 		})
+	}
+}
+
+const testAgentArn = "arn:aws:wisdom:eu-central-1:123456789012:ai-agent/97a0c52f-aaaa-bbbb-cccc-dddddddddddd/11111111-2222-3333-4444-555555555555"
+
+func TestAssociatedAIAgentArnsWithoutAVersionIsTheAgentAlone(t *testing.T) {
+	t.Parallel()
+
+	got := associatedAIAgentArns(testAgentArn, frameworktypes.Int64Null())
+	if len(got) != 1 || got[0] != testAgentArn {
+		t.Fatalf("associatedAIAgentArns() = %v, want only the agent ARN", got)
+	}
+}
+
+func TestAssociatedAIAgentArnsWithAVersionCoverEveryQualifier(t *testing.T) {
+	t.Parallel()
+
+	got := associatedAIAgentArns(testAgentArn, frameworktypes.Int64Value(3))
+	want := []string{testAgentArn, testAgentArn + ":$LATEST", testAgentArn + ":$SAVED", testAgentArn + ":3"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("associatedAIAgentArns() = %v, want %v", got, want)
+	}
+
+	checked := versionArnsToCheck(testAgentArn, frameworktypes.Int64Value(3))
+	if strings.Join(checked, ",") != testAgentArn+":$LATEST,"+testAgentArn+":3" {
+		t.Errorf("versionArnsToCheck() = %v, want :$LATEST and :3 without :$SAVED", checked)
+	}
+}
+
+func TestANewVersionMovesOnlyTheNumberedAssociation(t *testing.T) {
+	t.Parallel()
+
+	previous := associatedAIAgentArns(testAgentArn, frameworktypes.Int64Value(3))
+	planned := associatedAIAgentArns(testAgentArn, frameworktypes.Int64Value(4))
+
+	gone := arnsMissingFrom(previous, planned)
+	if len(gone) != 1 || gone[0] != testAgentArn+":3" {
+		t.Fatalf("arnsMissingFrom() = %v, want only :3", gone)
+	}
+}
+
+func TestDroppingTheVersionRemovesEveryVersionAssociation(t *testing.T) {
+	t.Parallel()
+
+	gone := arnsMissingFrom(
+		associatedAIAgentArns(testAgentArn, frameworktypes.Int64Value(3)),
+		associatedAIAgentArns(testAgentArn, frameworktypes.Int64Null()),
+	)
+	if len(gone) != 3 {
+		t.Fatalf("arnsMissingFrom() = %v, want :$LATEST, :$SAVED and :3", gone)
 	}
 }
