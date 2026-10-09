@@ -29,8 +29,7 @@ tasks:
     deps:
       - build
     vars:
-      INSTALL_PATH: "{{.HOME}}/.terraform.d/plugins/registry.opentofu.org/tecracer/connectracer/0.1.7/{{.GOOS}}_{{.GOARCH}}"
-      #INSTALL_PATH: "{{.HOME}}/.terraform.d/plugins/registry.terraform.io/tecracer/connectracer/0.1.7/{{.GOOS}}_{{.GOARCH}}"
+      INSTALL_PATH: "{{.HOME}}/.terraform.d/plugins/github.com/tecracer/connectracer/dev/{{.GOOS}}_{{.GOARCH}}"
     cmds:
       - mkdir -p {{.INSTALL_PATH}}
       - cp {{.DIST_DIR}}/{{.BINARY_NAME}} {{.INSTALL_PATH}}/{{.BINARY_NAME}}
