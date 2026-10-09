@@ -101,3 +101,28 @@ resource "connectracer_connect_ai_agent" "orchestration" {
     Workshop    = "agent-escalation"
   }
 }
+
+# Orchestration AI Agent that hands a voice call straight to an external agent
+# over A2A. The external agent speaks with its own voice, so the caller's audio
+# is streamed to it, which Connect only does with an immediate handoff. An
+# immediate audio handoff takes no orchestration prompt.
+resource "connectracer_connect_ai_agent" "voice_handoff" {
+  assistant_id      = "12345678-1234-1234-1234-123456789012"
+  name              = "voice-handoff-agent"
+  type              = "ORCHESTRATION"
+  visibility_status = "PUBLISHED"
+  description       = "Hands every voice call to the external voice agent"
+  create_version    = true
+
+  orchestration_configuration {
+    connect_instance_arn = "arn:aws:connect:eu-central-1:123456789012:instance/ffffffff-1111-2222-3333-444444444444"
+    locale               = "en_US"
+
+    handoff_agent_configuration {
+      application_id          = connectracer_connect_app_integration.voice_agent.id
+      instruction             = "Transfer the conversation to this agent for every voice interaction."
+      audio_streaming_enabled = true
+      immediate_handoff       = true
+    }
+  }
+}

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - `connectracer_connect_app_integration`: `application_type = "A2A_SERVER"` and an `auth_config` attribute (`auth_type`, `credential_provider_identifier`), for an external AI agent Amazon Connect collaborates with over the A2A protocol. A configuration of type `A2A_SERVER` without `auth_config` is refused at plan time, since AppIntegrations refuses to create one.
+- `connectracer_connect_ai_agent`: `handoff_agent_configuration` and `delegate_agent_configuration` blocks in `orchestration_configuration`, the collaborator agents of an orchestrator (`multiAgentConfigurations`). A collaborator is an AppIntegrations application (`application_id`) or a Connect AI agent (`ai_agent_id`). A handoff sets `audio_streaming_enabled` and `immediate_handoff`, which an external voice agent with its own voice needs. A changed collaborator publishes a new version like any other change of the configuration.
+
+### Fixed
+- `connectracer_connect_ai_tool` no longer drops an orchestrator's collaborator agents when it adds or removes a tool. It sends back the configuration it reads, and the SDK before this release did not know `multiAgentConfigurations`, so the field was missing from what it sent.
 
 ### Changed
 - Built with Go 1.27.2. The AWS SDK clients for AppIntegrations, Q in Connect and Connect are updated to the versions that model agent-to-agent collaboration (`A2A_SERVER` applications, `AuthConfig`, handoff configuration on AI agents, `AllowedAIAgents` on security profiles).
