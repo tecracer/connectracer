@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-16
+### Added
+- `connectracer_connect_hours_of_operation_override`: replaces the weekly schedule of an hours of operation for a date range, e.g. a Christmas closure. Without `config` the range is closed. It sends the empty opening hours that awscc drops, so a closed range works with the hours of operation left on `aws_connect_hours_of_operation`.
+
 ## [0.8.0] - 2026-10-09
 ### Added
 - `connectracer_connect_app_integration`: `application_type = "A2A_SERVER"` and an `auth_config` attribute (`auth_type`, `credential_provider_identifier`), for an external AI agent Amazon Connect collaborates with over the A2A protocol. A configuration of type `A2A_SERVER` without `auth_config` is refused at plan time, since AppIntegrations refuses to create one.
