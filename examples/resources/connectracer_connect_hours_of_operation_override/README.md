@@ -23,7 +23,7 @@ A *Check hours of operation* block with *Check override* enabled branches on `Cl
 resource "connectracer_connect_hours_of_operation_override" "christmas" {
   instance_id           = var.instance_id
   hours_of_operation_id = aws_connect_hours_of_operation.support.hours_of_operation_id
-  name                  = "Weihnachten"
+  name                  = "Christmas"
   effective_from        = "2026-12-24"
   effective_till        = "2026-12-26"
 }

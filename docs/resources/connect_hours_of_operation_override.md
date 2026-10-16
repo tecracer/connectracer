@@ -23,7 +23,7 @@ The resource creates a one-off override (`STANDARD`). Recurring overrides are no
 resource "connectracer_connect_hours_of_operation_override" "christmas" {
   instance_id           = "12345678-1234-1234-1234-123456789012"
   hours_of_operation_id = aws_connect_hours_of_operation.support.hours_of_operation_id
-  name                  = "Weihnachten"
+  name                  = "Christmas"
   effective_from        = "2026-12-24"
   effective_till        = "2026-12-26"
 }
@@ -32,7 +32,7 @@ resource "connectracer_connect_hours_of_operation_override" "christmas" {
 resource "connectracer_connect_hours_of_operation_override" "new_years_eve" {
   instance_id           = "12345678-1234-1234-1234-123456789012"
   hours_of_operation_id = aws_connect_hours_of_operation.support.hours_of_operation_id
-  name                  = "Silvester"
+  name                  = "New Year's Eve"
   description           = "Open until noon"
   effective_from        = "2026-12-31"
   effective_till        = "2026-12-31"
