@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-19
+### Added
+- `connectracer_connect_data_table_record`: a record of a data table, with its primary values and the values of its other attributes addressed by name. It reads the lock version of every value right before it writes and writes all values of the record in one call, so changing a record works where `awscc_connect_data_table_record` fails with *Provided lock does not match expected lock*. A record that exists already is taken over on create, so moving from awscc needs only a `removed` block, and a write that conflicts with a parallel one is retried.
+
 ## [0.9.0] - 2026-10-16
 ### Added
 - `connectracer_connect_hours_of_operation_override`: replaces the weekly schedule of an hours of operation for a date range, e.g. a Christmas closure. Without `config` the range is closed. It sends the empty opening hours that awscc drops, so a closed range works with the hours of operation left on `aws_connect_hours_of_operation`.
