@@ -4,7 +4,7 @@ page_title: "connectracer_connect_data_table_record Resource - connectracer"
 subcategory: ""
 description: |-
   A record of an Amazon Connect data table: its primary values and the values of its other attributes.
-  Attributes are addressed by name. Every write sends the lock version Connect currently holds for each value, read right before the write, and writes all values of the record in one call. A value changed outside Terraform is therefore overwritten on the next apply rather than failing it.
+  Attributes are addressed by name. Every write sends the lock version Connect currently holds for each value, read right before the write, and writes all values of the record in one call. A value changed outside Terraform is therefore overwritten on the next apply rather than failing it. To leave values to the admin website after the create, set lifecycle { ignore_changes = [values] }.
   A record whose primary values exist already is taken over on create rather than refused. A write that conflicts with another one, e.g. from a parallel apply, is retried with the record read again.
 ---
 
@@ -12,7 +12,7 @@ description: |-
 
 A record of an Amazon Connect data table: its primary values and the values of its other attributes.
 
-Attributes are addressed by name. Every write sends the lock version Connect currently holds for each value, read right before the write, and writes all values of the record in one call. A value changed outside Terraform is therefore overwritten on the next apply rather than failing it.
+Attributes are addressed by name. Every write sends the lock version Connect currently holds for each value, read right before the write, and writes all values of the record in one call. A value changed outside Terraform is therefore overwritten on the next apply rather than failing it. To leave values to the admin website after the create, set `lifecycle { ignore_changes = [values] }`.
 
 A record whose primary values exist already is taken over on create rather than refused. A write that conflicts with another one, e.g. from a parallel apply, is retried with the record read again.
 

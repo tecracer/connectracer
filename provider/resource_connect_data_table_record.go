@@ -57,7 +57,8 @@ func (r *ConnectDataTableRecordResource) Schema(_ context.Context, _ resource.Sc
 		MarkdownDescription: "A record of an Amazon Connect data table: its primary values and the values of its other attributes.\n\n" +
 			"Attributes are addressed by name. Every write sends the lock version Connect currently holds for each " +
 			"value, read right before the write, and writes all values of the record in one call. A value changed " +
-			"outside Terraform is therefore overwritten on the next apply rather than failing it.\n\n" +
+			"outside Terraform is therefore overwritten on the next apply rather than failing it. To leave values to the " +
+			"admin website after the create, set `lifecycle { ignore_changes = [values] }`.\n\n" +
 			"A record whose primary values exist already is taken over on create rather than refused. A write that " +
 			"conflicts with another one, e.g. from a parallel apply, is retried with the record read again.",
 

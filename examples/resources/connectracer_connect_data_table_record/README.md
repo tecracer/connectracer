@@ -14,6 +14,22 @@ A record of an Amazon Connect data table: its primary values and the values of i
 - An attribute dropped from `values` is deleted from the record. An attribute the configuration never had, e.g. one set in the admin website, is left alone.
 - A value changed outside Terraform is overwritten on the next apply.
 
+## Values edited in the admin website
+
+When the values belong to the admin website and Terraform should only seed them, ignore them after the create:
+
+```hcl
+resource "connectracer_connect_data_table_record" "support_closed" {
+  # ...
+
+  lifecycle {
+    ignore_changes = [values]
+  }
+}
+```
+
+Terraform then creates the record with the configured values and leaves later edits alone. A changed value in the configuration only reaches a record Terraform creates.
+
 ## Taking over existing records
 
 A record whose primary values exist already, e.g. one created by `awscc_connect_data_table_record`, is taken over on create rather than refused, and only the values that differ are written. Moving from awscc therefore needs no import:
